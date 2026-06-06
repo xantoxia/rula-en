@@ -415,6 +415,9 @@ with st.form("rula_assessment_form"):
     
     submit_button = st.form_submit_button("开始评估", type="primary", width='stretch')
 
+# 自动生成AI分析
+st.markdown("<div class='section-header'>【第三部分】💡 AI分析建议及咨询</div>", unsafe_allow_html=True)
+
 # 评估结果计算与展示
 if submit_button:
     scores = calculate_rula_scores(
@@ -506,8 +509,6 @@ if submit_button:
                 {"role": "assistant", "content": ai_response}
             ]
             st.markdown(ai_response)
-# 自动生成AI分析
-st.markdown("<div class='section-header'>【第三部分】💡 AI分析建议及咨询</div>", unsafe_allow_html=True)
 
 def display_chat_messages():
     if "messages" in st.session_state:
