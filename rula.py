@@ -1,25 +1,25 @@
-# ===================== 最开头：只使用你上传到GitHub的本地模型文件 =====================
-import os
-
-# 模型文件已经和代码一起上传到GitHub仓库根目录
-MODEL_PATH = 'pose_landmark_lite.tflite'
-
-# 检查模型文件是否存在
-if not os.path.exists(MODEL_PATH):
-    raise FileNotFoundError(
-        "请确保 pose_landmark_lite.tflite 文件已经上传到GitHub仓库根目录\n"
-        "你已经上传的0.5.16版本模型完全可以正常使用"
-    )
-
-print("使用本地模型文件：", MODEL_PATH)
-
 # ===================== 正常导入 =====================
-import streamlit as st
 import cv2
 import mediapipe as mp
 import numpy as np
+import streamlit as st
+from PIL import Image
+import pandas as pd
+import pickle
+from matplotlib import pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import seaborn as sns
+from matplotlib import font_manager
+import os
 from openai import OpenAI
+import base64
+import requests
 import datetime
+import io
+import pytz
+
 
 # ===================== 页面基础配置 =====================
 st.set_page_config(
