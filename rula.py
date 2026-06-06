@@ -8,7 +8,7 @@ import datetime
 
 # ===================== 页面基础配置 =====================
 st.set_page_config(
-    page_title="RULA快速上肢评估系统",
+    page_title="RULA 快速上肢评估 系统",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -293,12 +293,13 @@ def call_deepseek_api(messages):
         st.error(f"API错误: {e}")
         return ""
 
-# ===================== 主页面 =====================
-st.markdown("<h1 class='main-header'>RULA快速上肢评估系统</h1>", unsafe_allow_html=True)
+# ===================== 主页面内容 =====================
+st.markdown("<h1 class='main-header'>RULA 快速上肢评估 系统</h1>", unsafe_allow_html=True)
 st.markdown("本系统基于**RULA快速上肢评估法**（McAtamney & Corlett, 1993）开发，严格遵循**ISO 11226:2000《人因工程-静态工作姿势评估》**国际标准。")
 
-st.markdown("<div class='section-header'>📷 照片自动识别角度</div>", unsafe_allow_html=True)
-uploaded_file = st.file_uploader("上传工作姿势照片（支持JPG、PNG）", type=["jpg", "jpeg", "png"])
+# 照片自动识别角度功能
+st.markdown("<div class='section-header'>📷 照片自动识别人体角度</div>", unsafe_allow_html=True)
+uploaded_file = st.file_uploader("上传工作姿势照片（建议侧身 90° 标准侧视图全身照）（支持JPG、PNG）", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     with st.spinner("正在识别姿势..."):
@@ -306,17 +307,22 @@ if uploaded_file:
         image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         processed_image, rula_angles, detection_message = process_image(image)
         
-        # ✅ 图片宽度 640px（你要的）
+        # 修复：限制图片最大宽度为640px，不再占满整个屏幕
         st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="姿势识别结果", width=640)
         
+        # 关键修复：只有真正检测成功时才更新角度
         if detection_message.startswith("✅"):
             st.session_state.auto_angles = rula_angles
             st.session_state.detection_success = True
             st.success(detection_message)
         else:
             st.session_state.detection_success = False
-            st.error(detection_message)
+            if detection_message.startswith("⚠️"):
+                st.warning(detection_message)
+            else:
+                st.error(detection_message)
 
+# 关键修复：只有检测成功时才使用自动识别的角度，否则使用默认值
 if st.session_state.detection_success and st.session_state.auto_angles:
     default_arm = int(st.session_state.auto_angles["arm_angle"])
     default_forearm = int(st.session_state.auto_angles["forearm_angle"])
@@ -326,9 +332,9 @@ if st.session_state.detection_success and st.session_state.auto_angles:
 else:
     default_arm = 0
     default_forearm = 90
-    default_wrist = 12
-    default_neck = 15
-    default_trunk = 10
+    default_wrist = 0
+    default_neck = 0
+    default_trunk = 0
 
 # 评估表单
 with st.form("rula_assessment_form"):
@@ -392,7 +398,7 @@ with st.form("rula_assessment_form"):
     
     submit_button = st.form_submit_button("开始评估", type="primary", width='stretch')
 
-# 评估结果
+# 评估结果计算与展示
 if submit_button:
     scores = calculate_rula_scores(
         arm_angle, arm_abduction, shoulder_raise, arm_support,
@@ -410,13 +416,28 @@ if submit_button:
     
     col9, col10, col11, col12 = st.columns(4)
     with col9:
-        st.markdown("<div class='score-box'>A总分（上肢）<br><div class='score-value'>"+str(scores['a_total'])+"</div></div>", unsafe_allow_html=True)
+        st.markdown("<div class='score-box'>", unsafe_allow_html=True)
+        st.markdown("A总分（上肢）")
+        st.markdown(f"<div class='score-value'>{scores['a_total']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
     with col10:
-        st.markdown("<div class='score-box'>B总分（躯干）<br><div class='score-value'>"+str(scores['b_total'])+"</div></div>", unsafe_allow_html=True)
+        st.markdown("<div class='score-box'>", unsafe_allow_html=True)
+        st.markdown("B总分（躯干）")
+        st.markdown(f"<div class='score-value'>{scores['b_total']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
     with col11:
-        st.markdown("<div class='score-box'>C/D总分<br><div class='score-value'>"+str(scores['c_total'])+"/"+str(scores['d_total'])+"</div></div>", unsafe_allow_html=True)
+        st.markdown("<div class='score-box'>", unsafe_allow_html=True)
+        st.markdown("C/D总分")
+        st.markdown(f"<div class='score-value'>{scores['c_total']}/{scores['d_total']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
     with col12:
-        st.markdown("<div class='score-box'>最终RULA总分<br><div class='score-value "+scores['risk_class']+"'>"+str(scores['rula_total'])+"</div></div>", unsafe_allow_html=True)
+        st.markdown("<div class='score-box'>", unsafe_allow_html=True)
+        st.markdown("最终RULA总分")
+        st.markdown(f"<div class='score-value {scores['risk_class']}'>{scores['rula_total']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
     
     st.markdown(f"""
     <div style='background-color: #F8F9FA; padding: 20px; border-radius: 10px; margin: 15px 0;'>
@@ -425,24 +446,55 @@ if submit_button:
     </div>
     """, unsafe_allow_html=True)
     
-    # AI 分析
+    # 自动生成AI分析
     st.markdown("<div class='section-header'>五、AI专业分析与改善建议</div>", unsafe_allow_html=True)
     with st.spinner("正在生成专业分析..."):
-        ai_prompt = f"""你是人因工程专家。RULA结果：手臂{arm_angle}°，前臂{forearm_angle}°，手腕{wrist_bend}°，颈部{neck_angle}°，躯干{trunk_angle}°。RULA总分{scores['rula_total']}。请给专业改善建议。"""
+        ai_prompt = f"""
+        你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。
+        以下是用户的RULA评估数据，请基于这些数据进行专业的风险分析，并给出可落地的改善建议。
+
+        评估数据：
+        1. 上肢评分：
+           - 手臂弯曲角度：{arm_angle}°，最终评分：{scores['arm_final']}
+           - 前臂弯曲角度：{forearm_angle}°，最终评分：{scores['forearm_final']}
+           - 手腕弯曲角度：{wrist_bend}°，最终评分：{scores['wrist_final']}
+           - A总分：{scores['a_total']}
+        2. 躯干评分：
+           - 颈部弯曲角度：{neck_angle}°，最终评分：{scores['neck_final']}
+           - 身躯弯曲角度：{trunk_angle}°，最终评分：{scores['trunk_final']}
+           - 腿部评分：{scores['leg_final']}
+           - B总分：{scores['b_total']}
+        3. 肌肉与负荷评分：
+           - 肌肉状态：{muscle_state}，评分：{scores['muscle_score']}
+           - 负荷状态：{load_state}，评分：{scores['load_score']}
+           - C总分：{scores['c_total']}，D总分：{scores['d_total']}
+        4. 最终结果：
+           - RULA总分：{scores['rula_total']}
+           - 行动水准：{scores['action_level']}
+           - 处理方案：{scores['action_plan']}
+
+        要求：
+        1. 先说明整体的风险等级和核心问题
+        2. 分点分析每个身体部位的具体风险，结合RULA评估标准
+        3. 给出针对性的、可落地的改善建议，分为姿势调整、工作环境优化、休息方案三个部分
+        4. 语言专业、简洁、易懂
+        """
+        
         ai_response = call_deepseek_api([
-            {"role": "system", "content": "你是专业的人因工程专家，精通RULA和ISO 11226。"},
+            {"role": "system", "content": "你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。"},
             {"role": "user", "content": ai_prompt}
         ])
+        
         if ai_response:
             st.session_state.messages = [
-                {"role": "system", "content": "你是专业的人因工程专家。"},
+                {"role": "system", "content": "你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。"},
                 {"role": "user", "content": ai_prompt},
                 {"role": "assistant", "content": ai_response}
             ]
             st.markdown(ai_response)
 
-# 聊天
-st.markdown("<div class='section-header'>四、持续咨询</div>", unsafe_allow_html=True)
+# 持续对话交流
+st.markdown("<div class='section-header'>四、持续咨询交流</div>", unsafe_allow_html=True)
 
 def display_chat_messages():
     if "messages" in st.session_state:
@@ -456,7 +508,7 @@ display_chat_messages()
 prompt = st.chat_input("继续咨询人因工程相关问题：")
 if prompt:
     if not st.session_state.api_key_entered:
-        st.error("请先完成评估")
+        st.error("请先完成评估，系统会自动初始化API")
     else:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.spinner("思考中..."):
@@ -465,17 +517,24 @@ if prompt:
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
                 st.rerun()
 
-# 侧边栏
+# 侧边栏说明
 with st.sidebar:
     st.markdown("### 系统说明")
     st.markdown("""
-    本系统基于**RULA快速上肢评估法**，遵循 **ISO 11226** 标准。
+    本系统基于**RULA快速上肢评估法**（McAtamney & Corlett, 1993）开发，严格遵循**ISO 11226:2000《人因工程-静态工作姿势评估》**国际标准。
+    
+    #### 核心功能：
+    1. 📷 上传照片自动识别所有核心角度
+    2. 100%匹配官方RULA评估表的评分逻辑
+    3. 自动查表计算A/B/C/D总分和最终RULA总分
+    4. AI专业分析与改善建议
+    5. 持续的人因工程咨询交流
     
     #### 评分标准：
-    | 总分 | 行动水准 |
-    |------|----------|
-    | 1-2 | AL1 不需处理 |
-    | 3-4 | AL2 进一步调查 |
-    | 5-6 | AL3 近日改善 |
-    | ≥7 | AL4 立即改善 |
+    | RULA总分 | 行动水准 | 处理方案 |
+    |----------|----------|----------|
+    | 1-2 | AL1 | 不需处理 |
+    | 3-4 | AL2 | 进一步调查及必要时改善 |
+    | 5-6 | AL3 | 近日内需进一步调查及改善 |
+    | ≥7 | AL4 | 必须立即调查及改善 |
     """)
