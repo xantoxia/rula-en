@@ -353,19 +353,19 @@ with st.form("rula_assessment_form"):
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("#### 1）手臂弯曲评分")
+        st.markdown("##### 1）手臂弯曲评分")
         arm_angle = st.slider("手臂弯曲角度（°）", -90, 180, default_arm, help="前倾为正，后倾为负")
         arm_abduction = st.checkbox("手臂外扩", value=False)
         shoulder_raise = st.checkbox("肩膀提高", value=False)
         arm_support = st.checkbox("手臂有支撑（减1分）", value=False)
     
     with col2:
-        st.markdown("#### 2）前臂弯曲评分")
+        st.markdown("##### 2）前臂弯曲评分")
         forearm_angle = st.slider("前臂弯曲角度（°）", 0, 180, default_forearm, help="60-100°为中立位")
         forearm_abduction = st.checkbox("前臂外扩", value=False)
     
     with col3:
-        st.markdown("#### 3）手腕评分")
+        st.markdown("##### 3）手腕评分")
         wrist_bend = st.slider("手腕弯曲角度（°）", -45, 45, default_wrist, help="上倾为正，下倾为负")
         wrist_twist = st.checkbox("手腕扭转", value=False)
     
@@ -373,37 +373,37 @@ with st.form("rula_assessment_form"):
     
     col4, col5, col6 = st.columns(3)
     with col4:
-        st.markdown("#### 1）颈部评分")
+        st.markdown("##### 1）颈部评分")
         neck_angle = st.slider("颈部弯曲角度（°）", -30, 60, default_neck, help="前倾为正，后仰为负")
         neck_twist = st.checkbox("颈部扭转", value=False)
         neck_bend = st.checkbox("颈部侧弯", value=False)
     
     with col5:
-        st.markdown("#### 2）身躯评分")
+        st.markdown("##### 2）身躯评分")
         trunk_angle = st.slider("身躯弯曲角度（°）", 0, 90, default_trunk, help="前倾为正")
         trunk_twist = st.checkbox("身躯扭转", value=False)
         trunk_bend = st.checkbox("身躯侧弯", value=False)
     
     with col6:
-        st.markdown("#### 3）腿部评分")
+        st.markdown("##### 3）腿部评分")
         leg_support = st.checkbox("腿和脚踝有适当支撑且平衡", value=True)
     
     st.markdown("<div class='sub-header-green'> C、D部分：肌肉状态与负荷状态评分</div>", unsafe_allow_html=True)
     
     col7, col8 = st.columns(2)
     with col7:
-        st.markdown("#### 1）肌肉状态评分")
+        st.markdown("##### 1）肌肉状态评分")
         muscle_state = st.selectbox(
             "肌肉工作状态",
-            ["无特殊状态", "静态持物超过1分钟", "重复作业超过4次/分钟"],
+            ["无特殊状态", "静态、或持物超过1分钟", "重复作业超过4次/分钟"],
             index=0
         )
     
     with col8:
-        st.markdown("#### 2）力量负荷评分")
+        st.markdown("##### 2）力量、负荷状态评分")
         load_state = st.selectbox(
             "工作负荷状态",
-            ["无作用力/小于2kg", "2-10kg周期性负荷", "2-10kg静态/重复负荷", "10kg以上静态/重复负荷"],
+            ["无作用力/小于2kg周期性的负荷或力量", "2-10kg周期性的负荷或力量", "2-10kg静态/重复负荷，10kg或更多周期性负荷", "10kg静态，10kg重复的负荷或力量，振动或力量快速增加"],
             index=0
         )
     
