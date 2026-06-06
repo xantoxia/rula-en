@@ -1,16 +1,33 @@
-# ===================== 最开头：手动下载模型到可写目录，彻底解决权限问题 =====================
+# ===================== 最开头：双保险模型加载方案 =====================
 import os
 import urllib.request
 
-# 强制把模型下载到 /tmp 目录（Streamlit Cloud唯一可写目录）
-MODEL_PATH = '/tmp/pose_landmark_lite.tflite'
-if not os.path.exists(MODEL_PATH):
+# 模型文件路径（优先使用本地文件，彻底避免网络下载问题）
+LOCAL_MODEL_PATH = 'pose_landmark_lite.tflite'
+TMP_MODEL_PATH = '/tmp/pose_landmark_lite.tflite'
+
+# 优先使用本地模型（和代码一起上传到GitHub）
+if os.path.exists(LOCAL_MODEL_PATH):
+    MODEL_PATH = LOCAL_MODEL_PATH
+    print("使用本地模型文件")
+# 其次使用/tmp目录的缓存模型
+elif os.path.exists(TMP_MODEL_PATH):
+    MODEL_PATH = TMP_MODEL_PATH
+    print("使用缓存模型文件")
+# 最后尝试从官方CDN下载（修正后的正确URL）
+else:
     print("正在下载 Mediapipe 姿势识别模型...")
-    urllib.request.urlretrieve(
-        'https://storage.googleapis.com/mediapipe-models/pose_landmark/pose_landmark_lite/float16/1/pose_landmark_lite.tflite',
-        MODEL_PATH
-    )
-    print("模型下载完成！")
+    try:
+        urllib.request.urlretrieve(
+            'https://storage.googleapis.com/mediapipe-models/pose_landmark/pose_landmark_lite/float16/latest/pose_landmark_lite.tflite',
+            TMP_MODEL_PATH
+        )
+        MODEL_PATH = TMP_MODEL_PATH
+        print("模型下载完成！")
+    except Exception as e:
+        print(f"模型下载失败: {str(e)}")
+        print("请手动下载模型文件并和代码一起上传到GitHub")
+        MODEL_PATH = None
 
 # ===================== 正常导入 =====================
 import streamlit as st
@@ -91,10 +108,14 @@ def get_coord(landmark, W, H):
     return [landmark.x * W, landmark.y * H, landmark.z]
 
 def process_image(image):
+    if not MODEL_PATH:
+        st.error("模型文件加载失败，请手动下载模型并上传到GitHub")
+        return image, {"arm_angle": 0, "forearm_angle": 90, "wrist_bend": 0, "neck_angle": 0, "trunk_angle": 0}
+    
     H, W, _ = image.shape
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # 关键修复：使用我们手动下载到/tmp的模型，彻底避免自动下载权限问题
+    # 使用我们指定路径的模型
     pose = mp_pose.Pose(
         static_image_mode=True,
         model_complexity=0,
@@ -102,7 +123,7 @@ def process_image(image):
         min_detection_confidence=0.5,
         enable_segmentation=False,
         smooth_segmentation=False,
-        model_path=MODEL_PATH  # 手动指定模型路径
+        model_path=MODEL_PATH
     )
     pose_result = pose.process(img_rgb)
     
@@ -211,7 +232,7 @@ def process_image(image):
     pose.close()
     return image, rula_angles
 
-# ===================== RULA评分核心逻辑（100%匹配评估表，修复类型错误） =====================
+# ===================== RULA评分核心逻辑（100%匹配评估表） =====================
 def get_arm_base_score(arm_angle):
     if -20 <= arm_angle <= 20:
         return 1
@@ -265,25 +286,13 @@ def get_trunk_base_score(trunk_angle):
 def get_leg_score(leg_support):
     return 1 if leg_support else 2
 
-# 表1：A总分查表（修复索引方式）
+# 表1：A总分查表
 def get_table1_score(arm_score, forearm_score, wrist_score, wrist_twist):
     table1 = [
-        # 手臂得分=1
-        [
-            [1,2], [2,2], [2,2], [3,3]  # 前臂得分=1,2,3,4
-        ],
-        # 手臂得分=2
-        [
-            [2,2], [2,2], [2,3], [3,3]
-        ],
-        # 手臂得分=3
-        [
-            [2,3], [3,3], [3,3], [4,4]
-        ],
-        # 手臂得分=4
-        [
-            [3,3], [3,3], [3,4], [4,4]
-        ]
+        [[1,2], [2,2], [2,2], [3,3]],
+        [[2,2], [2,2], [2,3], [3,3]],
+        [[2,3], [3,3], [3,3], [4,4]],
+        [[3,3], [3,3], [3,4], [4,4]]
     ]
     arm_idx = max(0, min(3, arm_score - 1))
     forearm_idx = max(0, min(3, forearm_score - 1))
@@ -291,25 +300,13 @@ def get_table1_score(arm_score, forearm_score, wrist_score, wrist_twist):
     twist_idx = 1 if wrist_twist else 0
     return table1[arm_idx][forearm_idx][wrist_idx][twist_idx]
 
-# 表2：B总分查表（关键修复：彻底修正索引方式，确保返回整数）
+# 表2：B总分查表
 def get_table2_score(neck_score, trunk_score, leg_score):
     table2 = [
-        # 颈部得分=1
-        [
-            [1,2], [2,3], [3,4], [5,6]  # 身躯得分=1,2,3,4
-        ],
-        # 颈部得分=2
-        [
-            [2,3], [3,4], [4,5], [5,6]
-        ],
-        # 颈部得分=3
-        [
-            [3,4], [4,5], [5,6], [6,7]
-        ],
-        # 颈部得分=4
-        [
-            [5,6], [5,6], [6,7], [7,8]
-        ]
+        [[1,2], [2,3], [3,4], [5,6]],
+        [[2,3], [3,4], [4,5], [5,6]],
+        [[3,4], [4,5], [5,6], [6,7]],
+        [[5,6], [5,6], [6,7], [7,8]]
     ]
     neck_idx = max(0, min(3, neck_score - 1))
     trunk_idx = max(0, min(3, trunk_score - 1))
