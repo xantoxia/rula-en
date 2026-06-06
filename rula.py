@@ -1,3 +1,17 @@
+# ===================== 最开头添加这两行！ =====================
+import os
+os.environ['MEDIAPIPE_MODEL_PATH'] = '/tmp'
+# ============================================================
+
+import streamlit as st
+import cv2
+import mediapipe as mp
+import numpy as np
+from openai import OpenAI
+import datetime
+
+# ... 后面所有代码保持不变 ...
+
 import streamlit as st
 import cv2
 import mediapipe as mp
