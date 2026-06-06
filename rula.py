@@ -92,36 +92,23 @@ if "auto_angles" not in st.session_state:
 if "detection_success" not in st.session_state:
     st.session_state.detection_success = False
 
-# ===================== Mediapipe 导入与配置 =====================
-def load_pose_models():
-    mp_pose = mp.solutions.pose
-    mp_hands = mp.solutions.hands
-    pose = mp_pose.Pose(min_detection_confidence=0.8, min_tracking_confidence=0.8)
-    hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
-    return mp_pose, mp_hands, pose, hands
-    
-def get_coord(landmark, model_type='pose', img_width=640, img_height=480):
-    if model_type == 'pose':
-        return [landmark.x * img_width, landmark.y * img_height, landmark.z * img_width]
-    elif model_type == 'hands':
-        return [landmark.x * img_width, landmark.y * img_height, 0]
+# ===================== ✅ 已修复：MediaPipe 图片识别代码（替换完成） =====================
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
 
 def process_image(image):
     H, W, _ = image.shape
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
-    # 使用你上传的本地模型文件
-    pose = mp_pose.Pose(
+
+    # ✅ 使用你另一个文件里能正常运行的写法
+    with mp_pose.Pose(
         static_image_mode=True,
         model_complexity=0,
         smooth_landmarks=True,
-        min_detection_confidence=0.5,
-        enable_segmentation=False,
-        smooth_segmentation=False,
-        model_path=MODEL_PATH
-    )
-    pose_result = pose.process(img_rgb)
-    
+        min_detection_confidence=0.5
+    ) as pose:
+        pose_result = pose.process(img_rgb)
+
     rula_angles = {
         "arm_angle": 0,
         "forearm_angle": 90,
@@ -129,110 +116,51 @@ def process_image(image):
         "neck_angle": 0,
         "trunk_angle": 0
     }
-    
-    detection_message = None
+
+    detection_message = "❌ 未能检测到人体姿势，请上传清晰的工作姿势照片"
+
     if pose_result.pose_landmarks:
-        def get_pose_pt(landmark):
-            return get_coord(pose_result.pose_landmarks.landmark[landmark], W, H)
-        
-        # 提取所有关键点
-        left_shoulder = get_pose_pt(mp_pose.PoseLandmark.LEFT_SHOULDER)
-        right_shoulder = get_pose_pt(mp_pose.PoseLandmark.RIGHT_SHOULDER)
-        left_elbow = get_pose_pt(mp_pose.PoseLandmark.LEFT_ELBOW)
-        right_elbow = get_pose_pt(mp_pose.PoseLandmark.RIGHT_ELBOW)
-        left_wrist = get_pose_pt(mp_pose.PoseLandmark.LEFT_WRIST)
-        right_wrist = get_pose_pt(mp_pose.PoseLandmark.RIGHT_WRIST)
-        left_hip = get_pose_pt(mp_pose.PoseLandmark.LEFT_HIP)
-        right_hip = get_pose_pt(mp_pose.PoseLandmark.RIGHT_HIP)
-        left_knee = get_pose_pt(mp_pose.PoseLandmark.LEFT_KNEE)
-        right_knee = get_pose_pt(mp_pose.PoseLandmark.RIGHT_KNEE)
-        nose = get_pose_pt(mp_pose.PoseLandmark.NOSE)
+        lm = pose_result.pose_landmarks.landmark
 
-        # 关键点存在性检查
-        if (left_shoulder is not None and right_shoulder is not None and
-            left_hip is not None and right_hip is not None and
-            left_knee is not None and right_knee is not None):
-            
-            # 中点
-            mid_shoulder = [(left_shoulder[i] + right_shoulder[i])/2 for i in range(3)]
-            mid_hip = [(left_hip[i] + right_hip[i])/2 for i in range(3)]
-            mid_knee = [(left_knee[i] + right_knee[i])/2 for i in range(3)]
+        # 坐标提取（和你能运行的文件写法一致）
+        def p(i):
+            return [lm[i].x * W, lm[i].y * H]
 
-            # 角度计算（和你疲劳工具完全一致）
-            def calculate_neck_flexion(nose, mid_shoulder, mid_hip):
-                v_neck = np.array(nose) - np.array(mid_shoulder)
-                v_trunk = np.array(mid_hip) - np.array(mid_shoulder)
-                dot = np.dot(v_neck[:2], v_trunk[:2])
-                cos_theta = dot / (np.linalg.norm(v_neck[:2]) * np.linalg.norm(v_trunk[:2]) + 1e-6)
-                angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-                return max(0, min(60, angle))
+        nose = p(0)
+        l_sho = p(11)
+        r_sho = p(12)
+        l_elb = p(13)
+        l_wri = p(15)
+        l_hip = p(23)
+        r_hip = p(24)
+        l_knee = p(25)
 
-            def calculate_trunk_flexion(mid_shoulder, mid_hip, mid_knee):
-                v_trunk = np.array(mid_shoulder) - np.array(mid_hip)
-                v_leg = np.array(mid_knee) - np.array(mid_hip)
-                dot = np.dot(v_trunk[:2], v_leg[:2])
-                cos_theta = dot / (np.linalg.norm(v_trunk[:2]) * np.linalg.norm(v_leg[:2]) + 1e-6)
-                angle = 180 - np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-                return max(0, min(90, angle))
+        mid_sho = [(l_sho[0] + r_sho[0])/2, (l_sho[1] + r_sho[1])/2]
+        mid_hip = [(l_hip[0] + r_hip[0])/2, (l_hip[1] + r_hip[1])/2]
 
-            def calculate_shoulder_abduction(shoulder, elbow):
-                v_arm = np.array(elbow) - np.array(shoulder)
-                v_vert = np.array([0, 1, 0])
-                dot = np.dot(v_arm[:2], v_vert[:2])
-                cos_theta = dot / (np.linalg.norm(v_arm[:2]) + 1e-6)
-                raw_angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-                shoulder_angle = 180 - raw_angle if raw_angle > 90 else raw_angle
-                return max(0, min(180, shoulder_angle))
+        # 三点角度计算（你原版可运行的稳定算法）
+        def ang(a, b, c):
+            va = np.array([a[0]-b[0], a[1]-b[1]])
+            vb = np.array([c[0]-b[0], c[1]-b[1]])
+            cos_theta = np.dot(va, vb) / (np.linalg.norm(va) * np.linalg.norm(vb) + 1e-6)
+            return np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
 
-            def calculate_elbow_flexion(shoulder, elbow, wrist):
-                v_upper = np.array(shoulder) - np.array(elbow)
-                v_lower = np.array(wrist) - np.array(elbow)
-                dot = np.dot(v_upper[:2], v_lower[:2])
-                cos_theta = dot / (np.linalg.norm(v_upper[:2]) * np.linalg.norm(v_lower[:2]) + 1e-6)
-                angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-                return max(0, min(180, angle))
+        # 计算 RULA 所需角度
+        rula_angles["neck_angle"] = min(60, max(0, ang(nose, mid_sho, mid_hip)))
+        rula_angles["trunk_angle"] = min(90, max(0, ang(mid_sho, mid_hip, l_knee)))
+        rula_angles["arm_angle"] = min(180, max(0, ang(mid_hip, l_sho, l_elb)))
+        rula_angles["forearm_angle"] = min(180, max(0, ang(l_sho, l_elb, l_wri)))
+        rula_angles["wrist_bend"] = 0
 
-            def calculate_wrist_extension(elbow, wrist, index_tip):
-                v_forearm = np.array(elbow) - np.array(wrist)
-                v_hand = np.array(index_tip) - np.array(wrist)
-                dot = np.dot(v_forearm[:2], v_hand[:2])
-                cos_theta = dot / (np.linalg.norm(v_forearm[:2]) * np.linalg.norm(v_hand[:2]) + 1e-6)
-                angle = 180 - np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-                return max(-45, min(45, angle))
+        detection_message = "✅ 角度已自动识别并填充，可手动修正"
 
-            # 计算RULA所需角度
-            rula_angles["neck_angle"] = calculate_neck_flexion(nose, mid_shoulder, mid_hip)
-            rula_angles["trunk_angle"] = calculate_trunk_flexion(mid_shoulder, mid_hip, mid_knee)
-            
-            # 优先使用左侧手臂
-            if np.linalg.norm(np.array(left_elbow) - np.array(left_shoulder)) > 10:
-                rula_angles["arm_angle"] = calculate_shoulder_abduction(left_shoulder, left_elbow)
-                rula_angles["forearm_angle"] = calculate_elbow_flexion(left_shoulder, left_elbow, left_wrist)
-                rula_angles["wrist_bend"] = calculate_wrist_extension(left_elbow, left_wrist, left_wrist)
-            else:
-                rula_angles["arm_angle"] = calculate_shoulder_abduction(right_shoulder, right_elbow)
-                rula_angles["forearm_angle"] = calculate_elbow_flexion(right_shoulder, right_elbow, right_wrist)
-                rula_angles["wrist_bend"] = calculate_wrist_extension(right_elbow, right_wrist, right_wrist)
-
-            detection_message = "✅ 角度已自动识别并填充，可手动修正"
-        else:
-            detection_message = "⚠️ 未能检测到完整的人体关键点，请确保照片中包含完整的上半身"
-    else:
-        detection_message = "❌ 未能检测到人体姿势，请上传清晰的工作姿势照片"
-
-    # 绘制骨架
-    if pose_result.pose_landmarks:
-        drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2)
-        connection_spec = mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
+        # 绘制骨架
         mp_drawing.draw_landmarks(
             image,
             pose_result.pose_landmarks,
-            mp_pose.POSE_CONNECTIONS,
-            drawing_spec,
-            connection_spec
+            mp_pose.POSE_CONNECTIONS
         )
-    
-    pose.close()
+
     return image, rula_angles, detection_message
 
 # ===================== RULA评分核心逻辑（100%匹配评估表） =====================
