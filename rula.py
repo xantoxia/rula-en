@@ -1,28 +1,19 @@
-# ===================== 最开头：双保险模型加载方案 =====================
+# ===================== 最开头：自动从国内可访问的 jsdelivr CDN 下载模型 =====================
 import os
 import urllib.request
 
-# 模型文件路径（优先使用本地文件，彻底避免网络下载问题）
-LOCAL_MODEL_PATH = 'pose_landmark_lite.tflite'
-TMP_MODEL_PATH = '/tmp/pose_landmark_lite.tflite'
+# 模型文件路径（缓存到 /tmp 目录）
+MODEL_PATH = '/tmp/pose_landmark_lite.tflite'
 
-# 优先使用本地模型（和代码一起上传到GitHub）
-if os.path.exists(LOCAL_MODEL_PATH):
-    MODEL_PATH = LOCAL_MODEL_PATH
-    print("使用本地模型文件")
-# 其次使用/tmp目录的缓存模型
-elif os.path.exists(TMP_MODEL_PATH):
-    MODEL_PATH = TMP_MODEL_PATH
-    print("使用缓存模型文件")
-# 最后尝试从官方CDN下载（修正后的正确URL）
-else:
-    print("正在下载 Mediapipe 姿势识别模型...")
+# 如果模型不存在，自动从 jsdelivr 下载（国内可稳定访问）
+if not os.path.exists(MODEL_PATH):
+    print("正在从 jsdelivr CDN 下载 Mediapipe 姿势识别模型...")
     try:
+        # jsdelivr 上 @mediapipe/pose 包中的 lite 模型直接地址
         urllib.request.urlretrieve(
-            'https://storage.googleapis.com/mediapipe-models/pose_landmark/pose_landmark_lite/float16/latest/pose_landmark_lite.tflite',
-            TMP_MODEL_PATH
+            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.10.14/models/pose_landmark_lite.tflite',
+            MODEL_PATH
         )
-        MODEL_PATH = TMP_MODEL_PATH
         print("模型下载完成！")
     except Exception as e:
         print(f"模型下载失败: {str(e)}")
@@ -109,13 +100,13 @@ def get_coord(landmark, W, H):
 
 def process_image(image):
     if not MODEL_PATH:
-        st.error("模型文件加载失败，请手动下载模型并上传到GitHub")
+        st.error("模型文件加载失败，请检查网络连接或手动上传模型")
         return image, {"arm_angle": 0, "forearm_angle": 90, "wrist_bend": 0, "neck_angle": 0, "trunk_angle": 0}
     
     H, W, _ = image.shape
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # 使用我们指定路径的模型
+    # 使用我们从 jsdelivr 下载的模型
     pose = mp_pose.Pose(
         static_image_mode=True,
         model_complexity=0,
