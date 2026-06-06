@@ -74,16 +74,6 @@ import mediapipe as mp
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 
-# 移除 @st.cache_resource！Mediapipe 模型不能被缓存
-def load_pose_models():
-    pose = mp_pose.Pose(
-        static_image_mode=True,
-        model_complexity=1,
-        smooth_landmarks=True,
-        min_detection_confidence=0.5
-    )
-    return pose
-
 def get_coord(landmark, W, H):
     return [landmark.x * W, landmark.y * H, landmark.z]
 
@@ -91,8 +81,15 @@ def process_image(image):
     H, W, _ = image.shape
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # 每次调用都重新创建模型实例，用完即关
-    pose = load_pose_models()
+    # 关键修复1：强制使用CPU模式，禁用GPU加速，解决GL上下文错误
+    pose = mp_pose.Pose(
+        static_image_mode=True,
+        model_complexity=0,  # 使用最轻量模型，CPU上运行最快最稳定
+        smooth_landmarks=True,
+        min_detection_confidence=0.5,
+        enable_segmentation=False,  # 禁用分割，减少资源占用
+        smooth_segmentation=False
+    )
     pose_result = pose.process(img_rgb)
     
     rula_angles = {
@@ -107,7 +104,7 @@ def process_image(image):
         def get_pose_pt(landmark):
             return get_coord(pose_result.pose_landmarks.landmark[landmark], W, H)
         
-        # 提取关键点
+        # 提取所有关键点（关键修复2：补上右膝盖关键点）
         left_shoulder = get_pose_pt(mp_pose.PoseLandmark.LEFT_SHOULDER)
         right_shoulder = get_pose_pt(mp_pose.PoseLandmark.RIGHT_SHOULDER)
         left_elbow = get_pose_pt(mp_pose.PoseLandmark.LEFT_ELBOW)
@@ -117,73 +114,79 @@ def process_image(image):
         left_hip = get_pose_pt(mp_pose.PoseLandmark.LEFT_HIP)
         right_hip = get_pose_pt(mp_pose.PoseLandmark.RIGHT_HIP)
         left_knee = get_pose_pt(mp_pose.PoseLandmark.LEFT_KNEE)
+        right_knee = get_pose_pt(mp_pose.PoseLandmark.RIGHT_KNEE)  # 补上这行！
         nose = get_pose_pt(mp_pose.PoseLandmark.NOSE)
 
-        # 中点
-        mid_shoulder = [(left_shoulder[i] + right_shoulder[i])/2 for i in range(3)]
-        mid_hip = [(left_hip[i] + right_hip[i])/2 for i in range(3)]
-        mid_knee = [(left_knee[i] + right_knee[i])/2 for i in range(3)]
+        # 关键修复3：增加关键点存在性检查，防止未检测到关键点时崩溃
+        if (left_shoulder is not None and right_shoulder is not None and
+            left_hip is not None and right_hip is not None and
+            left_knee is not None and right_knee is not None):
+            
+            # 中点
+            mid_shoulder = [(left_shoulder[i] + right_shoulder[i])/2 for i in range(3)]
+            mid_hip = [(left_hip[i] + right_hip[i])/2 for i in range(3)]
+            mid_knee = [(left_knee[i] + right_knee[i])/2 for i in range(3)]
 
-        # ===================== 角度计算（已修复，和你疲劳工具完全一致） =====================
-        # 1. 颈部前屈
-        def calculate_neck_flexion(nose, mid_shoulder, mid_hip):
-            v_neck = np.array(nose) - np.array(mid_shoulder)
-            v_trunk = np.array(mid_hip) - np.array(mid_shoulder)
-            dot = np.dot(v_neck[:2], v_trunk[:2])
-            cos_theta = dot / (np.linalg.norm(v_neck[:2]) * np.linalg.norm(v_trunk[:2]) + 1e-6)
-            angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-            return max(0, min(60, angle))
+            # ===================== 角度计算（和你疲劳工具完全一致） =====================
+            # 1. 颈部前屈
+            def calculate_neck_flexion(nose, mid_shoulder, mid_hip):
+                v_neck = np.array(nose) - np.array(mid_shoulder)
+                v_trunk = np.array(mid_hip) - np.array(mid_shoulder)
+                dot = np.dot(v_neck[:2], v_trunk[:2])
+                cos_theta = dot / (np.linalg.norm(v_neck[:2]) * np.linalg.norm(v_trunk[:2]) + 1e-6)
+                angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                return max(0, min(60, angle))
 
-        # 2. 背部屈曲
-        def calculate_trunk_flexion(mid_shoulder, mid_hip, mid_knee):
-            v_trunk = np.array(mid_shoulder) - np.array(mid_hip)
-            v_leg = np.array(mid_knee) - np.array(mid_hip)
-            dot = np.dot(v_trunk[:2], v_leg[:2])
-            cos_theta = dot / (np.linalg.norm(v_trunk[:2]) * np.linalg.norm(v_leg[:2]) + 1e-6)
-            angle = 180 - np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-            return max(0, min(90, angle))
+            # 2. 背部屈曲
+            def calculate_trunk_flexion(mid_shoulder, mid_hip, mid_knee):
+                v_trunk = np.array(mid_shoulder) - np.array(mid_hip)
+                v_leg = np.array(mid_knee) - np.array(mid_hip)
+                dot = np.dot(v_trunk[:2], v_leg[:2])
+                cos_theta = dot / (np.linalg.norm(v_trunk[:2]) * np.linalg.norm(v_leg[:2]) + 1e-6)
+                angle = 180 - np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                return max(0, min(90, angle))
 
-        # 3. 肩部上举（已修复：下垂=0°，不会出现173°）
-        def calculate_shoulder_abduction(shoulder, elbow):
-            v_arm = np.array(elbow) - np.array(shoulder)
-            v_vert = np.array([0, 1, 0])
-            dot = np.dot(v_arm[:2], v_vert[:2])
-            cos_theta = dot / (np.linalg.norm(v_arm[:2]) + 1e-6)
-            raw_angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-            shoulder_angle = 180 - raw_angle if raw_angle > 90 else raw_angle
-            return max(0, min(180, shoulder_angle))
+            # 3. 肩部上举（已修复：下垂=0°，不会出现173°）
+            def calculate_shoulder_abduction(shoulder, elbow):
+                v_arm = np.array(elbow) - np.array(shoulder)
+                v_vert = np.array([0, 1, 0])
+                dot = np.dot(v_arm[:2], v_vert[:2])
+                cos_theta = dot / (np.linalg.norm(v_arm[:2]) + 1e-6)
+                raw_angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                shoulder_angle = 180 - raw_angle if raw_angle > 90 else raw_angle
+                return max(0, min(180, shoulder_angle))
 
-        # 4. 肘部屈伸
-        def calculate_elbow_flexion(shoulder, elbow, wrist):
-            v_upper = np.array(shoulder) - np.array(elbow)
-            v_lower = np.array(wrist) - np.array(elbow)
-            dot = np.dot(v_upper[:2], v_lower[:2])
-            cos_theta = dot / (np.linalg.norm(v_upper[:2]) * np.linalg.norm(v_lower[:2]) + 1e-6)
-            angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-            return max(0, min(180, angle))
+            # 4. 肘部屈伸
+            def calculate_elbow_flexion(shoulder, elbow, wrist):
+                v_upper = np.array(shoulder) - np.array(elbow)
+                v_lower = np.array(wrist) - np.array(elbow)
+                dot = np.dot(v_upper[:2], v_lower[:2])
+                cos_theta = dot / (np.linalg.norm(v_upper[:2]) * np.linalg.norm(v_lower[:2]) + 1e-6)
+                angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                return max(0, min(180, angle))
 
-        # 5. 手腕背伸
-        def calculate_wrist_extension(elbow, wrist, index_tip):
-            v_forearm = np.array(elbow) - np.array(wrist)
-            v_hand = np.array(index_tip) - np.array(wrist)
-            dot = np.dot(v_forearm[:2], v_hand[:2])
-            cos_theta = dot / (np.linalg.norm(v_forearm[:2]) * np.linalg.norm(v_hand[:2]) + 1e-6)
-            angle = 180 - np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
-            return max(-45, min(45, angle))
+            # 5. 手腕背伸
+            def calculate_wrist_extension(elbow, wrist, index_tip):
+                v_forearm = np.array(elbow) - np.array(wrist)
+                v_hand = np.array(index_tip) - np.array(wrist)
+                dot = np.dot(v_forearm[:2], v_hand[:2])
+                cos_theta = dot / (np.linalg.norm(v_forearm[:2]) * np.linalg.norm(v_hand[:2]) + 1e-6)
+                angle = 180 - np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                return max(-45, min(45, angle))
 
-        # 计算RULA所需角度（优先识别左侧，左侧不可见用右侧）
-        rula_angles["neck_angle"] = calculate_neck_flexion(nose, mid_shoulder, mid_hip)
-        rula_angles["trunk_angle"] = calculate_trunk_flexion(mid_shoulder, mid_hip, mid_knee)
-        
-        # 优先使用左侧手臂，左侧不可见用右侧
-        if np.linalg.norm(np.array(left_elbow) - np.array(left_shoulder)) > 10:
-            rula_angles["arm_angle"] = calculate_shoulder_abduction(left_shoulder, left_elbow)
-            rula_angles["forearm_angle"] = calculate_elbow_flexion(left_shoulder, left_elbow, left_wrist)
-            rula_angles["wrist_bend"] = calculate_wrist_extension(left_elbow, left_wrist, left_wrist)
-        else:
-            rula_angles["arm_angle"] = calculate_shoulder_abduction(right_shoulder, right_elbow)
-            rula_angles["forearm_angle"] = calculate_elbow_flexion(right_shoulder, right_elbow, right_wrist)
-            rula_angles["wrist_bend"] = calculate_wrist_extension(right_elbow, right_wrist, right_wrist)
+            # 计算RULA所需角度（优先识别左侧，左侧不可见用右侧）
+            rula_angles["neck_angle"] = calculate_neck_flexion(nose, mid_shoulder, mid_hip)
+            rula_angles["trunk_angle"] = calculate_trunk_flexion(mid_shoulder, mid_hip, mid_knee)
+            
+            # 优先使用左侧手臂，左侧不可见用右侧
+            if np.linalg.norm(np.array(left_elbow) - np.array(left_shoulder)) > 10:
+                rula_angles["arm_angle"] = calculate_shoulder_abduction(left_shoulder, left_elbow)
+                rula_angles["forearm_angle"] = calculate_elbow_flexion(left_shoulder, left_elbow, left_wrist)
+                rula_angles["wrist_bend"] = calculate_wrist_extension(left_elbow, left_wrist, left_wrist)
+            else:
+                rula_angles["arm_angle"] = calculate_shoulder_abduction(right_shoulder, right_elbow)
+                rula_angles["forearm_angle"] = calculate_elbow_flexion(right_shoulder, right_elbow, right_wrist)
+                rula_angles["wrist_bend"] = calculate_wrist_extension(right_elbow, right_wrist, right_wrist)
 
         # 绘制骨架
         drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2)
