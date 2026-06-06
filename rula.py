@@ -59,6 +59,14 @@ st.markdown("""
         margin: 0 auto !important;
         display: block !important;
     }
+    .sub-header-green {
+    background-color: #DFF2DD; /* 柔和草绿色，适配页面配色不刺眼 */
+    padding: 10px;
+    border-radius: 5px;
+    margin: 15px 0;
+    font-weight: bold;
+    color: #195927;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -340,7 +348,7 @@ else:
 st.markdown("<div class='section-header'>【第二部分】📊 RULA快速上肢评估</div>", unsafe_allow_html=True)
 # 表单从A分项开始，不再包含二级大标题
 with st.form("rula_assessment_form"):
-    st.markdown("<div class='section-header'> A部分：上肢评分（手臂、前臂、手腕）</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header-green'> A部分：上肢评分（手臂、前臂、手腕）</div>", unsafe_allow_html=True)
     # 原有所有滑块、勾选框代码完全保留不动
     
     col1, col2, col3 = st.columns(3)
@@ -361,7 +369,7 @@ with st.form("rula_assessment_form"):
         wrist_bend = st.slider("手腕弯曲角度（°）", -45, 45, default_wrist, help="上倾为正，下倾为负")
         wrist_twist = st.checkbox("手腕扭转", value=False)
     
-    st.markdown("<div class='section-header'> B部分：躯干评分（颈部、身躯、腿部）</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header-green'> B部分：躯干评分（颈部、身躯、腿部）</div>", unsafe_allow_html=True)
     
     col4, col5, col6 = st.columns(3)
     with col4:
@@ -380,7 +388,7 @@ with st.form("rula_assessment_form"):
         st.markdown("#### 3）腿部评分")
         leg_support = st.checkbox("腿和脚踝有适当支撑且平衡", value=True)
     
-    st.markdown("<div class='section-header'> C、D部分：肌肉状态与负荷状态评分</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header-green'> C、D部分：肌肉状态与负荷状态评分</div>", unsafe_allow_html=True)
     
     col7, col8 = st.columns(2)
     with col7:
@@ -532,7 +540,7 @@ with st.sidebar:
     | RULA总分 | 行动水准 | 处理方案 |
     |----------|----------|----------|
     | 1-2 | AL1 | 不需处理 |
-    | 3-4 | AL2 | 进一步调查及必要时改善 |
-    | 5-6 | AL3 | 近日内需进一步调查及改善 |
-    | ≥7 | AL4 | 必须立即调查及改善 |
+    | 3-4 | AL2 | 进一步调查及必要时进行改善 |
+    | 5-6 | AL3 | 近日内需进行进一步调查及改善 |
+    | ≥7 | AL4 | 必须立即进行调查及改善 |
     """)
