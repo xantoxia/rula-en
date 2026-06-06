@@ -298,7 +298,7 @@ st.markdown("<h1 class='main-header'>RULA 快速上肢评估 系统</h1>", unsaf
 st.markdown("本系统基于**RULA快速上肢评估法**（McAtamney & Corlett, 1993）开发，严格遵循**ISO 11226:2000《人因工程-静态工作姿势评估》**国际标准。")
 
 # 照片自动识别角度功能
-st.markdown("<div class='section-header'>📷 照片自动识别人体角度</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-header'>【第一部分】📷 照片识别角度（建议90°侧身全身拍照）</div>", unsafe_allow_html=True)
 uploaded_file = st.file_uploader("上传工作姿势照片（建议侧身 90° 标准侧视图全身照）（支持JPG、PNG）", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
@@ -338,7 +338,8 @@ else:
 
 # 评估表单
 with st.form("rula_assessment_form"):
-    st.markdown("<div class='section-header'>一、A部分：上肢评分（手臂、前臂、手腕）</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>【第二部分】📊 RULA 快速上肢评估</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'> A部分：上肢评分（手臂、前臂、手腕）</div>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -358,7 +359,7 @@ with st.form("rula_assessment_form"):
         wrist_bend = st.slider("手腕弯曲角度（°）", -45, 45, default_wrist, help="上倾为正，下倾为负")
         wrist_twist = st.checkbox("手腕扭转", value=False)
     
-    st.markdown("<div class='section-header'>二、B部分：躯干评分（颈部、身躯、腿部）</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'> B部分：躯干评分（颈部、身躯、腿部）</div>", unsafe_allow_html=True)
     
     col4, col5, col6 = st.columns(3)
     with col4:
@@ -377,7 +378,7 @@ with st.form("rula_assessment_form"):
         st.markdown("#### 3）腿部评分")
         leg_support = st.checkbox("腿和脚踝有适当支撑且平衡", value=True)
     
-    st.markdown("<div class='section-header'>三、C/D部分：肌肉与负荷评分</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'> C、D部分：肌肉状态与负荷状态评分</div>", unsafe_allow_html=True)
     
     col7, col8 = st.columns(2)
     with col7:
@@ -447,7 +448,7 @@ if submit_button:
     """, unsafe_allow_html=True)
     
     # 自动生成AI分析
-    st.markdown("<div class='section-header'>五、AI专业分析与改善建议</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>【第三部分】🤖 AI分析建议及咨询</div>", unsafe_allow_html=True)
     with st.spinner("正在生成专业分析..."):
         ai_prompt = f"""
         你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。
@@ -493,9 +494,6 @@ if submit_button:
             ]
             st.markdown(ai_response)
 
-# 持续对话交流
-st.markdown("<div class='section-header'>四、持续咨询交流</div>", unsafe_allow_html=True)
-
 def display_chat_messages():
     if "messages" in st.session_state:
         for msg in st.session_state.messages:
@@ -524,7 +522,7 @@ with st.sidebar:
     本系统基于**RULA快速上肢评估法**（McAtamney & Corlett, 1993）开发，严格遵循**ISO 11226:2000《人因工程-静态工作姿势评估》**国际标准。
     
     #### 核心功能：
-    1. 📷 上传照片自动识别所有核心角度
+    1. 上传照片自动识别所有核心角度
     2. 100%匹配官方RULA评估表的评分逻辑
     3. 自动查表计算A/B/C/D总分和最终RULA总分
     4. AI专业分析与改善建议
