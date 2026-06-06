@@ -92,11 +92,10 @@ if "auto_angles" not in st.session_state:
 if "detection_success" not in st.session_state:
     st.session_state.detection_success = False
 
-# ===================== 修复：Mediapipe 兼容写法 =====================
-mp_drawing = mp.solutions.drawing_utils
+# ===================== Mediapipe 导入与配置 =====================
 mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
 
-# ===================== 姿势识别函数 =====================
 def get_coord(landmark, W, H):
     return [landmark.x * W, landmark.y * H, landmark.z]
 
@@ -104,23 +103,16 @@ def process_image(image):
     H, W, _ = image.shape
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # 兼容所有 mediapipe 版本
-    try:
-        pose = mp_pose.Pose(
-            static_image_mode=True,
-            model_complexity=0,
-            smooth_landmarks=True,
-            min_detection_confidence=0.5,
-            model_path=MODEL_PATH
-        )
-    except:
-        pose = mp_pose.Pose(
-            static_image_mode=True,
-            model_complexity=0,
-            smooth_landmarks=True,
-            min_detection_confidence=0.5
-        )
-
+    # 使用你上传的本地模型文件
+    pose = mp_pose.Pose(
+        static_image_mode=True,
+        model_complexity=0,
+        smooth_landmarks=True,
+        min_detection_confidence=0.5,
+        enable_segmentation=False,
+        smooth_segmentation=False,
+        model_path=MODEL_PATH
+    )
     pose_result = pose.process(img_rgb)
     
     rula_angles = {
@@ -133,41 +125,104 @@ def process_image(image):
     
     detection_message = None
     if pose_result.pose_landmarks:
-        lm = pose_result.pose_landmarks.landmark
+        def get_pose_pt(landmark):
+            return get_coord(pose_result.pose_landmarks.landmark[landmark], W, H)
         
-        left_shoulder = get_coord(lm[11], W, H)
-        right_shoulder = get_coord(lm[12], W, H)
-        left_elbow = get_coord(lm[13], W, H)
-        left_wrist = get_coord(lm[15], W, H)
-        left_hip = get_coord(lm[23], W, H)
-        right_hip = get_coord(lm[24], W, H)
-        left_knee = get_coord(lm[25], W, H)
-        nose = get_coord(lm[0], W, H)
+        # 提取所有关键点
+        left_shoulder = get_pose_pt(mp_pose.PoseLandmark.LEFT_SHOULDER)
+        right_shoulder = get_pose_pt(mp_pose.PoseLandmark.RIGHT_SHOULDER)
+        left_elbow = get_pose_pt(mp_pose.PoseLandmark.LEFT_ELBOW)
+        right_elbow = get_pose_pt(mp_pose.PoseLandmark.RIGHT_ELBOW)
+        left_wrist = get_pose_pt(mp_pose.PoseLandmark.LEFT_WRIST)
+        right_wrist = get_pose_pt(mp_pose.PoseLandmark.RIGHT_WRIST)
+        left_hip = get_pose_pt(mp_pose.PoseLandmark.LEFT_HIP)
+        right_hip = get_pose_pt(mp_pose.PoseLandmark.RIGHT_HIP)
+        left_knee = get_pose_pt(mp_pose.PoseLandmark.LEFT_KNEE)
+        right_knee = get_pose_pt(mp_pose.PoseLandmark.RIGHT_KNEE)
+        nose = get_pose_pt(mp_pose.PoseLandmark.NOSE)
 
-        mid_shoulder = [(left_shoulder[i]+right_shoulder[i])/2 for i in range(3)]
-        mid_hip = [(left_hip[i]+right_hip[i])/2 for i in range(3)]
+        # 关键点存在性检查
+        if (left_shoulder is not None and right_shoulder is not None and
+            left_hip is not None and right_hip is not None and
+            left_knee is not None and right_knee is not None):
+            
+            # 中点
+            mid_shoulder = [(left_shoulder[i] + right_shoulder[i])/2 for i in range(3)]
+            mid_hip = [(left_hip[i] + right_hip[i])/2 for i in range(3)]
+            mid_knee = [(left_knee[i] + right_knee[i])/2 for i in range(3)]
 
-        def ang(a,b,c):
-            va = np.array([a[0]-b[0], a[1]-b[1]])
-            vb = np.array([c[0]-b[0], c[1]-b[1]])
-            cos = np.dot(va, vb) / (np.linalg.norm(va)*np.linalg.norm(vb)+1e-6)
-            return np.degrees(np.arccos(np.clip(cos, -1, 1)))
+            # 角度计算（和你疲劳工具完全一致）
+            def calculate_neck_flexion(nose, mid_shoulder, mid_hip):
+                v_neck = np.array(nose) - np.array(mid_shoulder)
+                v_trunk = np.array(mid_hip) - np.array(mid_shoulder)
+                dot = np.dot(v_neck[:2], v_trunk[:2])
+                cos_theta = dot / (np.linalg.norm(v_neck[:2]) * np.linalg.norm(v_trunk[:2]) + 1e-6)
+                angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                return max(0, min(60, angle))
 
-        rula_angles["neck_angle"] = min(60, max(0, ang(nose, mid_shoulder, mid_hip)))
-        rula_angles["trunk_angle"] = min(90, max(0, ang(mid_shoulder, mid_hip, left_knee)))
-        rula_angles["arm_angle"] = min(180, max(0, ang(mid_hip, left_shoulder, left_elbow)))
-        rula_angles["forearm_angle"] = min(180, max(0, ang(left_shoulder, left_elbow, left_wrist)))
-        rula_angles["wrist_bend"] = 0
+            def calculate_trunk_flexion(mid_shoulder, mid_hip, mid_knee):
+                v_trunk = np.array(mid_shoulder) - np.array(mid_hip)
+                v_leg = np.array(mid_knee) - np.array(mid_hip)
+                dot = np.dot(v_trunk[:2], v_leg[:2])
+                cos_theta = dot / (np.linalg.norm(v_trunk[:2]) * np.linalg.norm(v_leg[:2]) + 1e-6)
+                angle = 180 - np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                return max(0, min(90, angle))
 
-        detection_message = "✅ 角度已自动识别并填充，可手动修正"
+            def calculate_shoulder_abduction(shoulder, elbow):
+                v_arm = np.array(elbow) - np.array(shoulder)
+                v_vert = np.array([0, 1, 0])
+                dot = np.dot(v_arm[:2], v_vert[:2])
+                cos_theta = dot / (np.linalg.norm(v_arm[:2]) + 1e-6)
+                raw_angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                shoulder_angle = 180 - raw_angle if raw_angle > 90 else raw_angle
+                return max(0, min(180, shoulder_angle))
+
+            def calculate_elbow_flexion(shoulder, elbow, wrist):
+                v_upper = np.array(shoulder) - np.array(elbow)
+                v_lower = np.array(wrist) - np.array(elbow)
+                dot = np.dot(v_upper[:2], v_lower[:2])
+                cos_theta = dot / (np.linalg.norm(v_upper[:2]) * np.linalg.norm(v_lower[:2]) + 1e-6)
+                angle = np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                return max(0, min(180, angle))
+
+            def calculate_wrist_extension(elbow, wrist, index_tip):
+                v_forearm = np.array(elbow) - np.array(wrist)
+                v_hand = np.array(index_tip) - np.array(wrist)
+                dot = np.dot(v_forearm[:2], v_hand[:2])
+                cos_theta = dot / (np.linalg.norm(v_forearm[:2]) * np.linalg.norm(v_hand[:2]) + 1e-6)
+                angle = 180 - np.degrees(np.arccos(np.clip(cos_theta, -1, 1)))
+                return max(-45, min(45, angle))
+
+            # 计算RULA所需角度
+            rula_angles["neck_angle"] = calculate_neck_flexion(nose, mid_shoulder, mid_hip)
+            rula_angles["trunk_angle"] = calculate_trunk_flexion(mid_shoulder, mid_hip, mid_knee)
+            
+            # 优先使用左侧手臂
+            if np.linalg.norm(np.array(left_elbow) - np.array(left_shoulder)) > 10:
+                rula_angles["arm_angle"] = calculate_shoulder_abduction(left_shoulder, left_elbow)
+                rula_angles["forearm_angle"] = calculate_elbow_flexion(left_shoulder, left_elbow, left_wrist)
+                rula_angles["wrist_bend"] = calculate_wrist_extension(left_elbow, left_wrist, left_wrist)
+            else:
+                rula_angles["arm_angle"] = calculate_shoulder_abduction(right_shoulder, right_elbow)
+                rula_angles["forearm_angle"] = calculate_elbow_flexion(right_shoulder, right_elbow, right_wrist)
+                rula_angles["wrist_bend"] = calculate_wrist_extension(right_elbow, right_wrist, right_wrist)
+
+            detection_message = "✅ 角度已自动识别并填充，可手动修正"
+        else:
+            detection_message = "⚠️ 未能检测到完整的人体关键点，请确保照片中包含完整的上半身"
     else:
         detection_message = "❌ 未能检测到人体姿势，请上传清晰的工作姿势照片"
 
+    # 绘制骨架
     if pose_result.pose_landmarks:
+        drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2)
+        connection_spec = mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
         mp_drawing.draw_landmarks(
             image,
             pose_result.pose_landmarks,
-            mp_pose.POSE_CONNECTIONS
+            mp_pose.POSE_CONNECTIONS,
+            drawing_spec,
+            connection_spec
         )
     
     pose.close()
@@ -227,6 +282,7 @@ def get_trunk_base_score(trunk_angle):
 def get_leg_score(leg_support):
     return 1 if leg_support else 2
 
+# 表1：A总分查表
 def get_table1_score(arm_score, forearm_score, wrist_score, wrist_twist):
     table1 = [
         [[1,2], [2,2], [2,2], [3,3]],
@@ -240,6 +296,7 @@ def get_table1_score(arm_score, forearm_score, wrist_score, wrist_twist):
     twist_idx = 1 if wrist_twist else 0
     return table1[arm_idx][forearm_idx][wrist_idx][twist_idx]
 
+# 表2：B总分查表
 def get_table2_score(neck_score, trunk_score, leg_score):
     table2 = [
         [[1,2], [2,3], [3,4], [5,6]],
@@ -252,6 +309,7 @@ def get_table2_score(neck_score, trunk_score, leg_score):
     leg_idx = 0 if leg_score == 1 else 1
     return table2[neck_idx][trunk_idx][leg_idx]
 
+# 表3：最终RULA总分查表
 def get_table3_score(c_total, d_total):
     table3 = [
         [1,2,3,3,4,5,5,6,7],
@@ -351,9 +409,14 @@ def calculate_rula_scores(
 def call_deepseek_api(messages):
     try:
         if not st.session_state.client:
-            API_KEY = st.secrets["API_KEY"]
-            st.session_state.client = OpenAI(api_key=API_KEY, base_url="https://api.siliconflow.cn/v1")
-            st.session_state.api_key_entered = True
+            try:
+                API_KEY = st.secrets["API_KEY"]
+                st.session_state.client = OpenAI(api_key=API_KEY, base_url="https://api.siliconflow.cn/v1")
+                st.session_state.api_key_entered = True
+            except Exception as e:
+                st.error(f"API 初始化失败：{str(e)}")
+                st.info("请确保已在 Streamlit Secrets 中配置了 API_KEY")
+                return None
         
         completion = st.session_state.client.chat.completions.create(
             model="Pro/deepseek-ai/DeepSeek-V3.2",
@@ -363,9 +426,9 @@ def call_deepseek_api(messages):
         response = ""
         for chunk in completion:
             if chunk.choices and len(chunk.choices) > 0:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    response += delta.content
+                choice = chunk.choices[0]
+                if hasattr(choice, "delta") and hasattr(choice.delta, "content") and choice.delta.content is not None:
+                    response += choice.delta.content
         return response
     except Exception as e:
         st.error(f"API调用错误: {str(e)}")
@@ -385,17 +448,22 @@ if uploaded_file:
         image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         processed_image, rula_angles, detection_message = process_image(image)
         
+        # 限制图片最大宽度为800px
         st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="姿势识别结果", width=800)
         
+        # 只有真正检测成功时才更新角度
         if detection_message.startswith("✅"):
             st.session_state.auto_angles = rula_angles
             st.session_state.detection_success = True
             st.success(detection_message)
         else:
             st.session_state.detection_success = False
-            st.error(detection_message)
+            if detection_message.startswith("⚠️"):
+                st.warning(detection_message)
+            else:
+                st.error(detection_message)
 
-# 自动填充角度
+# 只有检测成功时才使用自动识别的角度，否则使用默认值
 if st.session_state.detection_success and st.session_state.auto_angles:
     default_arm = int(st.session_state.auto_angles["arm_angle"])
     default_forearm = int(st.session_state.auto_angles["forearm_angle"])
@@ -416,19 +484,19 @@ with st.form("rula_assessment_form"):
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("#### 1）手臂弯曲评分")
-        arm_angle = st.slider("手臂弯曲角度（°）", -90, 180, default_arm)
+        arm_angle = st.slider("手臂弯曲角度（°）", -90, 180, default_arm, help="前倾为正，后倾为负")
         arm_abduction = st.checkbox("手臂外扩", value=False)
         shoulder_raise = st.checkbox("肩膀提高", value=False)
         arm_support = st.checkbox("手臂有支撑（减1分）", value=False)
     
     with col2:
         st.markdown("#### 2）前臂弯曲评分")
-        forearm_angle = st.slider("前臂弯曲角度（°）", 0, 180, default_forearm)
+        forearm_angle = st.slider("前臂弯曲角度（°）", 0, 180, default_forearm, help="60-100°为中立位")
         forearm_abduction = st.checkbox("前臂外扩", value=False)
     
     with col3:
         st.markdown("#### 3）手腕评分")
-        wrist_bend = st.slider("手腕弯曲角度（°）", -45, 45, default_wrist)
+        wrist_bend = st.slider("手腕弯曲角度（°）", -45, 45, default_wrist, help="上倾为正，下倾为负")
         wrist_twist = st.checkbox("手腕扭转", value=False)
     
     st.markdown("<div class='section-header'>二、B部分：躯干评分（颈部、身躯、腿部）</div>", unsafe_allow_html=True)
@@ -436,13 +504,13 @@ with st.form("rula_assessment_form"):
     col4, col5, col6 = st.columns(3)
     with col4:
         st.markdown("#### 1）颈部评分")
-        neck_angle = st.slider("颈部弯曲角度（°）", -30, 60, default_neck)
+        neck_angle = st.slider("颈部弯曲角度（°）", -30, 60, default_neck, help="前倾为正，后仰为负")
         neck_twist = st.checkbox("颈部扭转", value=False)
         neck_bend = st.checkbox("颈部侧弯", value=False)
     
     with col5:
         st.markdown("#### 2）身躯评分")
-        trunk_angle = st.slider("身躯弯曲角度（°）", 0, 90, default_trunk)
+        trunk_angle = st.slider("身躯弯曲角度（°）", 0, 90, default_trunk, help="前倾为正")
         trunk_twist = st.checkbox("身躯扭转", value=False)
         trunk_bend = st.checkbox("身躯侧弯", value=False)
     
@@ -454,20 +522,24 @@ with st.form("rula_assessment_form"):
     
     col7, col8 = st.columns(2)
     with col7:
+        st.markdown("#### 1）肌肉状态评分")
         muscle_state = st.selectbox(
             "肌肉工作状态",
-            ["无特殊状态", "静态持物超过1分钟", "重复作业超过4次/分钟"]
+            ["无特殊状态", "静态持物超过1分钟", "重复作业超过4次/分钟"],
+            index=0
         )
     
     with col8:
+        st.markdown("#### 2）力量负荷评分")
         load_state = st.selectbox(
             "工作负荷状态",
-            ["无作用力/小于2kg", "2-10kg周期性负荷", "2-10kg静态/重复负荷", "10kg以上静态/重复负荷"]
+            ["无作用力/小于2kg", "2-10kg周期性负荷", "2-10kg静态/重复负荷", "10kg以上静态/重复负荷"],
+            index=0
         )
     
-    submit_button = st.form_submit_button("开始评估", type="primary")
+    submit_button = st.form_submit_button("开始评估", type="primary", width='stretch')
 
-# 评估结果
+# 评估结果计算与展示
 if submit_button:
     scores = calculate_rula_scores(
         arm_angle, arm_abduction, shoulder_raise, arm_support,
@@ -485,24 +557,125 @@ if submit_button:
     
     col9, col10, col11, col12 = st.columns(4)
     with col9:
-        st.markdown("<div class='score-box'>A总分（上肢）<div class='score-value'>"+str(scores['a_total'])+"</div></div>", unsafe_allow_html=True)
+        st.markdown("<div class='score-box'>", unsafe_allow_html=True)
+        st.markdown("A总分（上肢）")
+        st.markdown(f"<div class='score-value'>{scores['a_total']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
     with col10:
-        st.markdown("<div class='score-box'>B总分（躯干）<div class='score-value'>"+str(scores['b_total'])+"</div></div>", unsafe_allow_html=True)
+        st.markdown("<div class='score-box'>", unsafe_allow_html=True)
+        st.markdown("B总分（躯干）")
+        st.markdown(f"<div class='score-value'>{scores['b_total']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
     with col11:
-        st.markdown("<div class='score-box'>C/D总分<div class='score-value'>"+str(scores['c_total'])+"/"+str(scores['d_total'])+"</div></div>", unsafe_allow_html=True)
+        st.markdown("<div class='score-box'>", unsafe_allow_html=True)
+        st.markdown("C/D总分")
+        st.markdown(f"<div class='score-value'>{scores['c_total']}/{scores['d_total']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
     with col12:
-        st.markdown("<div class='score-box'>最终RULA总分<div class='score-value "+scores['risk_class']+"'>"+str(scores['rula_total'])+"</div></div>", unsafe_allow_html=True)
+        st.markdown("<div class='score-box'>", unsafe_allow_html=True)
+        st.markdown("最终RULA总分")
+        st.markdown(f"<div class='score-value {scores['risk_class']}'>{scores['rula_total']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
     
     st.markdown(f"""
-    <div style='background:#f8f9fa; padding:20px; border-radius:10px; margin:15px 0;'>
+    <div style='background-color: #F8F9FA; padding: 20px; border-radius: 10px; margin: 15px 0;'>
         <h3>行动水准：<span class='{scores['risk_class']}'>{scores['action_level']}</span></h3>
         <p>处理方案：<span class='{scores['risk_class']}'>{scores['action_plan']}</span></p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # 自动生成AI分析
+    st.markdown("<div class='section-header'>五、AI专业分析与改善建议</div>", unsafe_allow_html=True)
+    with st.spinner("正在生成专业分析..."):
+        ai_prompt = f"""
+        你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。
+        以下是用户的RULA评估数据，请基于这些数据进行专业的风险分析，并给出可落地的改善建议。
 
-# ===================== 侧边栏 =====================
+        评估数据：
+        1. 上肢评分：
+           - 手臂弯曲角度：{arm_angle}°，最终评分：{scores['arm_final']}
+           - 前臂弯曲角度：{forearm_angle}°，最终评分：{scores['forearm_final']}
+           - 手腕弯曲角度：{wrist_bend}°，最终评分：{scores['wrist_final']}
+           - A总分：{scores['a_total']}
+        2. 躯干评分：
+           - 颈部弯曲角度：{neck_angle}°，最终评分：{scores['neck_final']}
+           - 身躯弯曲角度：{trunk_angle}°，最终评分：{scores['trunk_final']}
+           - 腿部评分：{scores['leg_final']}
+           - B总分：{scores['b_total']}
+        3. 肌肉与负荷评分：
+           - 肌肉状态：{muscle_state}，评分：{scores['muscle_score']}
+           - 负荷状态：{load_state}，评分：{scores['load_score']}
+           - C总分：{scores['c_total']}，D总分：{scores['d_total']}
+        4. 最终结果：
+           - RULA总分：{scores['rula_total']}
+           - 行动水准：{scores['action_level']}
+           - 处理方案：{scores['action_plan']}
+
+        要求：
+        1. 先说明整体的风险等级和核心问题
+        2. 分点分析每个身体部位的具体风险，结合RULA评估标准
+        3. 给出针对性的、可落地的改善建议，分为姿势调整、工作环境优化、休息方案三个部分
+        4. 语言专业、简洁、易懂
+        """
+        
+        ai_response = call_deepseek_api([
+            {"role": "system", "content": "你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。"},
+            {"role": "user", "content": ai_prompt}
+        ])
+        
+        if ai_response:
+            st.session_state.messages = [
+                {"role": "system", "content": "你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。"},
+                {"role": "user", "content": ai_prompt},
+                {"role": "assistant", "content": ai_response}
+            ]
+            st.markdown(ai_response)
+
+# 持续对话交流
+st.markdown("<div class='section-header'>六、持续咨询交流</div>", unsafe_allow_html=True)
+
+def display_chat_messages():
+    if "messages" in st.session_state:
+        for msg in st.session_state.messages:
+            if msg["role"] != "system":
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+display_chat_messages()
+
+prompt = st.chat_input("继续咨询人因工程相关问题：")
+if prompt:
+    if not st.session_state.api_key_entered:
+        st.error("请先完成评估，系统会自动初始化API")
+    else:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.spinner("思考中..."):
+            full_response = call_deepseek_api(st.session_state.messages)
+            if full_response:
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                st.rerun()
+
+# 侧边栏说明
 with st.sidebar:
     st.markdown("### 系统说明")
     st.markdown("""
-    本系统基于**RULA快速上肢评估法**（McAtamney & Corlett, 1993）开发，严格遵循**ISO 11226:2000**国际标准。
+    本系统基于**RULA快速上肢评估法**（McAtamney & Corlett, 1993）开发，严格遵循**ISO 11226:2000《人因工程-静态工作姿势评估》**国际标准。
+    
+    #### 核心功能：
+    1. 📷 上传照片自动识别所有核心角度
+    2. 100%匹配官方RULA评估表的评分逻辑
+    3. 自动查表计算A/B/C/D总分和最终RULA总分
+    4. AI专业分析与改善建议
+    5. 持续的人因工程咨询交流
+    
+    #### 评分标准：
+    | RULA总分 | 行动水准 | 处理方案 |
+    |----------|----------|----------|
+    | 1-2 | AL1 | 不需处理 |
+    | 3-4 | AL2 | 进一步调查及必要时改善 |
+    | 5-6 | AL3 | 近日内需进一步调查及改善 |
+    | ≥7 | AL4 | 必须立即调查及改善 |
     """)
