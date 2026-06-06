@@ -100,17 +100,17 @@ def load_pose_models():
     hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
     return mp_pose, mp_hands, pose, hands
     
-def get_coord(landmark, W, H):
-    return [landmark.x * W, landmark.y * H, landmark.z]
+def get_coord(landmark, model_type='pose', img_width=640, img_height=480):
+    if model_type == 'pose':
+        return [landmark.x * img_width, landmark.y * img_height, landmark.z * img_width]
+    elif model_type == 'hands':
+        return [landmark.x * img_width, landmark.y * img_height, 0]
 
 def process_image(image):
-    if not MODEL_PATH:
-        return image, None, "模型文件加载失败，请检查网络连接或手动上传模型"
-    
     H, W, _ = image.shape
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # 使用我们从 jsdelivr 下载的模型
+    # 使用你上传的本地模型文件
     pose = mp_pose.Pose(
         static_image_mode=True,
         model_complexity=0,
