@@ -455,10 +455,12 @@ if submit_button:
     </div>
     """, unsafe_allow_html=True)
     
-    # 自动生成AI分析
-    st.markdown("<div class='section-header'>【第三部分】🤖 AI分析建议及咨询</div>", unsafe_allow_html=True)
     with st.spinner("正在生成专业分析..."):
         ai_prompt = f"""
+        
+# 自动生成AI分析
+st.markdown("<div class='section-header'>【第三部分】🤖 AI分析建议及咨询</div>", unsafe_allow_html=True)
+    
         你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。
         以下是用户的RULA评估数据，请基于这些数据进行专业的风险分析，并给出可落地的改善建议。
 
