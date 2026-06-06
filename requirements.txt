@@ -1,7 +1,7 @@
 streamlit>=1.30.0
 openai>=1.0.0
 opencv-python-headless>=4.8.0
-mediapipe==0.10.14  # 👈 关键：指定Python 3.14兼容的版本
+mediapipe>=0.10.30  # 👈 关键修改：升级到支持Python 3.14的版本
 numpy>=1.24.0
 pandas>=2.0.0
 matplotlib>=3.7.0
