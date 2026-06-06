@@ -507,7 +507,7 @@ if submit_button:
             ]
             st.markdown(ai_response)
 # 自动生成AI分析
-st.markdown("<div class='section-header'>【第三部分】🧠 AI分析建议及咨询</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-header'>【第三部分】💡 AI分析建议及咨询</div>", unsafe_allow_html=True)
 
 def display_chat_messages():
     if "messages" in st.session_state:
