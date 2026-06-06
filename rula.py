@@ -307,7 +307,7 @@ st.markdown("本系统基于**RULA快速上肢评估法**（McAtamney & Corlett,
 
 # 照片自动识别角度功能
 st.markdown("<div class='section-header'>【第一部分】📷 照片识别角度（建议90°侧身全身拍照）</div>", unsafe_allow_html=True)
-uploaded_file = st.file_uploader("上传工作姿势照片（建议侧身 90° 标准侧视图全身照）（支持JPG、PNG）", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("上传工作姿势照片（支持JPG、PNG）", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     with st.spinner("正在识别姿势..."):
