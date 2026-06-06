@@ -68,43 +68,31 @@ if "rula_result" not in st.session_state:
 if "auto_angles" not in st.session_state:
     st.session_state.auto_angles = None
 
-# ===================== MediaPipe 姿势识别（复用你已修复的代码） =====================
-@st.cache_resource
+# ===================== 修正：Mediapipe 导入方式 =====================
+import mediapipe as mp
+# 显式导入，避免模块属性错误
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
+
+# 移除 @st.cache_resource！Mediapipe 模型不能被缓存
 def load_pose_models():
-    mp_pose = mp.solutions.pose
-    mp_drawing = mp.solutions.drawing_utils
     pose = mp_pose.Pose(
         static_image_mode=True,
         model_complexity=1,
         smooth_landmarks=True,
         min_detection_confidence=0.5
     )
-    return mp_pose, mp_drawing, pose
+    return pose
 
 def get_coord(landmark, W, H):
     return [landmark.x * W, landmark.y * H, landmark.z]
 
-def draw_landmarks(image, joints):
-    mp_drawing = mp.solutions.drawing_utils
-    mp_pose = mp.solutions.pose
-    drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2)
-    connection_spec = mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
-    
-    # 绘制关键点和连接线
-    if 'pose_landmarks' in joints:
-        mp_drawing.draw_landmarks(
-            image,
-            joints['pose_landmarks'],
-            mp_pose.POSE_CONNECTIONS,
-            drawing_spec,
-            connection_spec
-        )
-    return image
-
 def process_image(image):
-    mp_pose, mp_drawing, pose = load_pose_models()
     H, W, _ = image.shape
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    # 每次调用都重新创建模型实例，用完即关
+    pose = load_pose_models()
     pose_result = pose.process(img_rgb)
     
     rula_angles = {
@@ -198,9 +186,17 @@ def process_image(image):
             rula_angles["wrist_bend"] = calculate_wrist_extension(right_elbow, right_wrist, right_wrist)
 
         # 绘制骨架
-        joints = {'pose_landmarks': pose_result.pose_landmarks}
-        draw_landmarks(image, joints)
+        drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2)
+        connection_spec = mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
+        mp_drawing.draw_landmarks(
+            image,
+            pose_result.pose_landmarks,
+            mp_pose.POSE_CONNECTIONS,
+            drawing_spec,
+            connection_spec
+        )
     
+    # 关键：用完立即关闭模型，释放资源
     pose.close()
     return image, rula_angles
 
