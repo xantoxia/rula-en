@@ -1,24 +1,17 @@
-# ===================== 最开头：自动从国内可访问的 jsdelivr CDN 下载模型 =====================
+# ===================== 最开头：只使用你上传到GitHub的本地模型文件 =====================
 import os
-import urllib.request
 
-# 模型文件路径（缓存到 /tmp 目录）
-MODEL_PATH = '/tmp/pose_landmark_lite.tflite'
+# 模型文件已经和代码一起上传到GitHub仓库根目录
+MODEL_PATH = 'pose_landmark_lite.tflite'
 
-# 如果模型不存在，自动从 jsdelivr 下载（国内可稳定访问）
+# 检查模型文件是否存在
 if not os.path.exists(MODEL_PATH):
-    print("正在从 jsdelivr CDN 下载 Mediapipe 姿势识别模型...")
-    try:
-        # jsdelivr 上 @mediapipe/pose 包中的 lite 模型直接地址
-        urllib.request.urlretrieve(
-            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.10.14/models/pose_landmark_lite.tflite',
-            MODEL_PATH
-        )
-        print("模型下载完成！")
-    except Exception as e:
-        print(f"模型下载失败: {str(e)}")
-        print("请手动下载模型文件并和代码一起上传到GitHub")
-        MODEL_PATH = None
+    raise FileNotFoundError(
+        "请确保 pose_landmark_lite.tflite 文件已经上传到GitHub仓库根目录\n"
+        "你已经上传的0.5.16版本模型完全可以正常使用"
+    )
+
+print("使用本地模型文件：", MODEL_PATH)
 
 # ===================== 正常导入 =====================
 import streamlit as st
@@ -107,13 +100,10 @@ def get_coord(landmark, W, H):
     return [landmark.x * W, landmark.y * H, landmark.z]
 
 def process_image(image):
-    if not MODEL_PATH:
-        return image, None, "模型文件加载失败，请检查网络连接或手动上传模型"
-    
     H, W, _ = image.shape
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # 使用我们从 jsdelivr 下载的模型
+    # 使用你上传的本地模型文件
     pose = mp_pose.Pose(
         static_image_mode=True,
         model_complexity=0,
@@ -458,10 +448,10 @@ if uploaded_file:
         image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         processed_image, rula_angles, detection_message = process_image(image)
         
-        # 修复：限制图片最大宽度为800px，不再占满整个屏幕
+        # 限制图片最大宽度为800px
         st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="姿势识别结果", width=800)
         
-        # 关键修复：只有真正检测成功时才更新角度
+        # 只有真正检测成功时才更新角度
         if detection_message.startswith("✅"):
             st.session_state.auto_angles = rula_angles
             st.session_state.detection_success = True
@@ -473,7 +463,7 @@ if uploaded_file:
             else:
                 st.error(detection_message)
 
-# 关键修复：只有检测成功时才使用自动识别的角度，否则使用默认值
+# 只有检测成功时才使用自动识别的角度，否则使用默认值
 if st.session_state.detection_success and st.session_state.auto_angles:
     default_arm = int(st.session_state.auto_angles["arm_angle"])
     default_forearm = int(st.session_state.auto_angles["forearm_angle"])
