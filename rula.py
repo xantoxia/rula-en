@@ -12,6 +12,9 @@ if "rula_history" not in st.session_state:
 # 标记本次是否需要生成AI
 if "need_gen_ai" not in st.session_state:
     st.session_state.need_gen_ai = False
+# 展开AI分析建议结果
+if "last_expand_idx" not in st.session_state:
+    st.session_state.last_expand_idx = -1
 
 # ===================== 页面基础配置 =====================
 st.set_page_config(
@@ -421,6 +424,18 @@ with st.form("rula_assessment_form"):
         )
     
     submit_button = st.form_submit_button("开始评估", type="primary", width='stretch')
+
+# ===================== 第三部分：只显示历史记录（不会重复） =====================
+st.markdown("<div class='section-header'>【第三部分】💡 AI分析建议及咨询</div>", unsafe_allow_html=True)
+
+if len(st.session_state.rula_history) == 0:
+    st.info("暂无评估历史，填写数据后点击开始评估生成首份报告")
+else:
+    for idx, item in enumerate(st.session_state.rula_history):
+        # 当前下标=上次新增下标 → 默认打开expanded=True
+        open_flag = True if idx == st.session_state.last_expand_idx else False
+        with st.expander(f"第{idx+1}次评估｜RULA总分：{item['score']}", expanded=open_flag):
+            st.markdown(item["content"])
     
 # 评估结果计算与展示（只算分、显示卡片，不生成AI）
 if submit_button:
@@ -468,7 +483,7 @@ if submit_button:
         <p>处理方案：<span class='{scores['risk_class']}'>{scores['action_plan']}</span></p>
     </div>
     """, unsafe_allow_html=True)
-
+    
 # ===================== 【关键】点击按钮 → 只触发一次AI生成 =====================
 if submit_button:
     st.session_state.need_gen_ai = True
@@ -519,19 +534,13 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state:
             "content": ai_response
         }
         st.session_state.rula_history.insert(0, new_item)
+        
+        # 新报告插到列表第0位，标记下标0
+        st.session_state.last_expand_idx = 0
+    
 
     # 生成完关闭，不再重复跑
     st.session_state.need_gen_ai = False
-
-# ===================== 第三部分：只显示历史记录（不会重复） =====================
-st.markdown("<div class='section-header'>【第三部分】💡 AI分析建议及咨询</div>", unsafe_allow_html=True)
-
-if len(st.session_state.rula_history) == 0:
-    st.info("暂无评估历史，填写数据后点击开始评估生成首份报告")
-else:
-    for idx, item in enumerate(st.session_state.rula_history):
-        with st.expander(f"第{idx+1}次评估｜RULA总分：{item['score']}"):
-            st.markdown(item["content"])
 
 def display_chat_messages():
     if "messages" in st.session_state:
