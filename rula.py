@@ -190,7 +190,7 @@ def get_leg_score(leg_support):
     return 1 if leg_support else 2
 
 def get_table1_score(arm, forearm, wrist, wrist_twist):
-    t = [[[[1,2],[2,2],[2,2],[3,3]], [[2,2],[2,2],[2,3],[3,3]], [[2,3],[3,3],[3,3],[4,4]], [[3,3],[3,3],[3,4],[4,4]]]
+    t = [[[[1,2],[2,2],[2,2],[3,3]], [[2,2],[2,2],[2,3],[3,3]], [[2,3],[3,3],[3,3],[4,4]], [[3,3],[3,3],[3,4],[4,4]]]]
     return t[max(0,min(3,arm-1))][max(0,min(3,forearm-1))][max(0,min(3,wrist-1))][1 if wrist_twist else 0]
 
 def get_table2_score(neck, trunk, leg):
