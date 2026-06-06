@@ -6,6 +6,13 @@ import numpy as np
 from openai import OpenAI
 import datetime
 
+# 初始化历史仓库
+if "rula_history" not in st.session_state:
+    st.session_state.rula_history = []  # 每条：{"参数":"","报告":"","时间":""}
+# 标记本次是否需要生成AI
+if "need_gen_ai" not in st.session_state:
+    st.session_state.need_gen_ai = False
+
 # ===================== 页面基础配置 =====================
 st.set_page_config(
     page_title="RULA 快速上肢评估 系统",
@@ -414,11 +421,8 @@ with st.form("rula_assessment_form"):
         )
     
     submit_button = st.form_submit_button("开始评估", type="primary", width='stretch')
-
-# 自动生成AI分析
-st.markdown("<div class='section-header'>【第三部分】💡 AI分析建议及咨询</div>", unsafe_allow_html=True)
-
-# 评估结果计算与展示
+    
+# 评估结果计算与展示（只算分、显示卡片，不生成AI）
 if submit_button:
     scores = calculate_rula_scores(
         arm_angle, arm_abduction, shoulder_raise, arm_support,
@@ -431,6 +435,7 @@ if submit_button:
     )
     
     st.session_state.rula_result = scores
+    st.session_state.last_scores = scores  # 把分数存起来给AI用
     
     col9, col10, col11, col12 = st.columns(4)
     with col9:
@@ -463,10 +468,16 @@ if submit_button:
         <p>处理方案：<span class='{scores['risk_class']}'>{scores['action_plan']}</span></p>
     </div>
     """, unsafe_allow_html=True)
+
+# ===================== 【关键】点击按钮 → 只触发一次AI生成 =====================
+if submit_button:
+    st.session_state.need_gen_ai = True
+
+if st.session_state.need_gen_ai and "last_scores" in st.session_state:
+    scores = st.session_state.last_scores
     
-    with st.spinner("正在生成专业分析..."):
+    with st.spinner("🧠 AI正在生成人因风险分析报告..."):
         ai_prompt = f"""      
-   
         你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。
         以下是用户的RULA评估数据，请基于这些数据进行专业的风险分析，并给出可落地的改善建议。
 
@@ -501,14 +512,26 @@ if submit_button:
             {"role": "system", "content": "你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。"},
             {"role": "user", "content": ai_prompt}
         ])
-        
-        if ai_response:
-            st.session_state.messages = [
-                {"role": "system", "content": "你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。"},
-                {"role": "user", "content": ai_prompt},
-                {"role": "assistant", "content": ai_response}
-            ]
-            st.markdown(ai_response)
+
+        # 存入历史
+        new_item = {
+            "score": scores['rula_total'],
+            "content": ai_response
+        }
+        st.session_state.rula_history.insert(0, new_item)
+
+    # 生成完关闭，不再重复跑
+    st.session_state.need_gen_ai = False
+
+# ===================== 第三部分：只显示历史记录（不会重复） =====================
+st.markdown("<div class='section-header'>【第三部分】💡 AI分析建议及咨询</div>", unsafe_allow_html=True)
+
+if len(st.session_state.rula_history) == 0:
+    st.info("暂无评估历史，填写数据后点击开始评估生成首份报告")
+else:
+    for idx, item in enumerate(st.session_state.rula_history):
+        with st.expander(f"第{idx+1}次评估｜RULA总分：{item['score']}"):
+            st.markdown(item["content"])
 
 def display_chat_messages():
     if "messages" in st.session_state:
