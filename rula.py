@@ -197,7 +197,7 @@ def process_image(image):
         landmarks = pose_result.pose_landmarks.landmark
         
         def is_visible(landmark_idx):
-            return landmarks[landmark_idx].visibility > 0.5
+            return landmarks[landmark_idx].visibility > 0.3
         
         def pt(landmark):
             return get_coord(landmarks[landmark], W, H)
