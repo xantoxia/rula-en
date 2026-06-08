@@ -6,15 +6,18 @@ import numpy as np
 from openai import OpenAI
 import datetime
 
-# 初始化历史仓库
+# 初始化历史仓库（每条记录自带独立聊天历史）
 if "rula_history" not in st.session_state:
-    st.session_state.rula_history = []  # 每条：{"参数":"","报告":"","时间":""}
+    st.session_state.rula_history = []
 # 标记本次是否需要生成AI
 if "need_gen_ai" not in st.session_state:
     st.session_state.need_gen_ai = False
 # 展开AI分析建议结果
 if "last_expand_idx" not in st.session_state:
     st.session_state.last_expand_idx = -1
+# 当前激活的聊天会话ID（-1表示没有激活）
+if "active_chat_id" not in st.session_state:
+    st.session_state.active_chat_id = -1
 
 # ===================== 页面基础配置 =====================
 st.set_page_config(
@@ -494,15 +497,18 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
             {"role": "user", "content": ai_prompt}
         ])
 
-        # 存入历史（新记录插最前面）
+        # 存入历史（新记录插最前面，自带空聊天历史）
         new_item = {
             "score": scores['rula_total'],
-            "content": ai_response
+            "content": full_response,
+            "messages": []  # 每条评估自带独立聊天历史
         }
         st.session_state.rula_history.insert(0, new_item)
         # 标记最新条目自动展开
         st.session_state.last_expand_idx = 0
-
+        # 新评估生成后自动激活它的聊天
+        st.session_state.active_chat_id = 0
+          
     # 生成完立即关闭开关，防止重复生成
     st.session_state.need_gen_ai = False
 
@@ -543,6 +549,7 @@ if "rula_result" in st.session_state and st.session_state.rula_result is not Non
     </div>
     """, unsafe_allow_html=True)
 
+# 2. 渲染第三部分标题+历史记录（永远在最下面，逻辑处理完才渲染）
 if len(st.session_state.rula_history) == 0:
     st.info("暂无评估历史，填写数据后点击开始评估生成首份报告")
 else:
@@ -550,7 +557,39 @@ else:
         # 最新条目自动展开
         open_flag = True if idx == st.session_state.last_expand_idx else False
         with st.expander(f"第{idx+1}次评估｜RULA总分：{item['score']}", expanded=open_flag):
+            # 显示AI分析报告
             st.markdown(item["content"])
+            
+            # 分割线
+            st.markdown("---")
+            
+            # 显示该评估的独立聊天历史
+            st.markdown("**💬 咨询记录**")
+            for message in item["messages"]:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+            
+            # 该评估的独立聊天输入框
+            prompt = st.chat_input(f"针对第{idx+1}次评估继续咨询...", key=f"chat_input_{idx}")
+            if prompt:
+                if not st.session_state.api_key_entered:
+                    st.error("请先完成评估，系统会自动初始化API")
+                else:
+                    # 添加用户消息到该评估的聊天历史
+                    item["messages"].append({"role": "user", "content": prompt})
+                    
+                    with st.spinner("思考中..."):
+                        # 构建上下文：系统提示 + 本次评估报告 + 历史聊天记录
+                        context_messages = [
+                            {"role": "system", "content": "你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。请基于上面的RULA评估报告回答用户的问题。"},
+                            {"role": "assistant", "content": item["content"]}
+                        ] + item["messages"]
+                        
+                        full_response = call_deepseek_api(context_messages)
+                        if full_response:
+                            # 添加AI回复到该评估的聊天历史
+                            item["messages"].append({"role": "assistant", "content": full_response})
+                            st.rerun()
 
 display_chat_messages()
 
