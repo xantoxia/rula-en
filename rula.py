@@ -101,7 +101,7 @@ if "detection_success" not in st.session_state:
 def load_pose_models():
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose(
-        static_image_mode=True,  # 静态图必须开！否则躯干/颈部识别失效
+        static_image_mode=True,  # 静态图必须开！否则身躯/颈部识别失效
         model_complexity=1,
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5
@@ -149,25 +149,25 @@ def calculate_neck_flexion(nose, left_shoulder, right_shoulder, left_hip, right_
         print(f"颈部角度计算失败: {e}")
         return None
 
-# ===================== ✅ 最终真实版：躯干角度 0~90° 全支持（RULA完美匹配）=====================
+# ===================== ✅ 最终真实版：身躯角度 0~90° 全支持（RULA完美匹配）=====================
 def calculate_trunk_flexion(left_shoulder, right_shoulder, left_hip, right_hip, left_knee, right_knee):
     try:
         mid_sho = [(left_shoulder[i] + right_shoulder[i])/2 for i in range(3)]
         mid_hip = [(left_hip[i] + right_hip[i])/2 for i in range(3)]
         mid_knee = [(left_knee[i] + right_knee[i])/2 for i in range(3)]
 
-        # 躯干垂直方向变化
+        # 身躯垂直方向变化
         dy = mid_hip[1] - mid_sho[1]
-        # 躯干水平方向变化（判断弯腰最关键）
+        # 身躯水平方向变化（判断弯腰最关键）
         dx = abs(mid_sho[0] - mid_hip[0])
 
-        # 躯干真实长度
+        # 身躯真实长度
         torso_length = np.sqrt(dx**2 + dy**2)
 
         if torso_length < 30:
             return None
 
-        # 真实躯干倾斜角度（0~90°）
+        # 真实身躯倾斜角度（0~90°）
         angle = np.degrees(np.arctan2(dx, dy))
 
         # 真实角度，不强行封顶
@@ -220,7 +220,7 @@ def process_image(image):
         avg_visibility = sum(lm.visibility for lm in landmarks) / len(landmarks)
         # 整体平均可见度低于0.28，姿态不可信，全部标记默认
         if avg_visibility < 0.28:
-            default_angles = ["手臂", "前臂", "手腕", "颈部", "躯干"]
+            default_angles = ["手臂", "前臂", "手腕", "颈部", "身躯"]
         else:
             # 正常阈值判断
             def is_visible(landmark_idx):
@@ -266,7 +266,7 @@ def process_image(image):
                 default_angles.append("颈部")
 
             # --------------------------
-            # 躯干：强制成功标记逻辑
+            # 身躯：强制成功标记逻辑
             # --------------------------
             trunk_ok = False
             if (is_visible(mp_pose.PoseLandmark.LEFT_SHOULDER) 
@@ -281,7 +281,7 @@ def process_image(image):
                     rula_angles["trunk_angle"] = trunk_angle
                     trunk_ok = True
             if not trunk_ok:
-                default_angles.append("躯干")
+                default_angles.append("身躯")
 
             # --------------------------
             # 手臂：强制成功标记逻辑
@@ -336,7 +336,7 @@ def process_image(image):
 
     else:
         # 完全检测不到人体骨架，全部默认
-        default_angles = ["手臂", "前臂", "手腕", "颈部", "躯干"]
+        default_angles = ["手臂", "前臂", "手腕", "颈部", "身躯"]
         detection_message = "⚠️ 未识别到人体姿态，全部使用默认值，请更换清晰侧身照片"
 
     pose.close()
@@ -513,7 +513,7 @@ if uploaded_file:
                 ("前臂", "forearm_angle"),
                 ("手腕", "wrist_bend"),
                 ("颈部", "neck_angle"),
-                ("躯干", "trunk_angle")
+                ("身躯", "trunk_angle")
             ]
             
             # 单独记录需要高亮的行索引
