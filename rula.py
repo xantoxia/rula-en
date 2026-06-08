@@ -123,12 +123,21 @@ def calculate_angle(a, b, c):
 # ===================== ✅ 修复 2：颈部角度失败不返回0 =====================
 def calculate_neck_flexion(nose, shoulder_mid, hip_mid):
     try:
+        # 方法1：侧面照片用角度差（原有逻辑）
         torso_vector = np.array(hip_mid) - np.array(shoulder_mid)
         head_vector = np.array(nose) - np.array(shoulder_mid)
-        angle = abs(np.degrees(np.arctan2(*torso_vector)) - np.degrees(np.arctan2(*head_vector)))
+        angle_side = abs(np.degrees(np.arctan2(*torso_vector)) - np.degrees(np.arctan2(*head_vector)))
+        
+        # 方法2：正面照片用垂直距离比（新增逻辑）
+        vertical_distance = abs(nose[1] - shoulder_mid[1])
+        horizontal_distance = abs(nose[0] - shoulder_mid[0])
+        angle_front = np.degrees(np.arctan2(vertical_distance, horizontal_distance))
+        
+        # 取两个方法的最大值，更准确
+        angle = max(angle_side, angle_front)
         return max(5, min(60, angle))
     except:
-        return 8  # 优化：更接近中立位，RULA评分1分（低风险）
+        return 8  # 识别失败默认8°
 
 # ===================== ✅ 修复 3：躯干角度失败不返回0 =====================
 def calculate_trunk_flexion(shoulder_mid, hip_mid, knee_mid):
@@ -141,12 +150,22 @@ def calculate_trunk_flexion(shoulder_mid, hip_mid, knee_mid):
         return 10  # 保持不变，已经很科学
 
 # ===================== ✅ 修复 4：手腕角度增加计算 =====================
-def calculate_wrist_bend(ellbow, wrist, mcp):
+def calculate_wrist_bend(elbow, wrist, hand_direction):
     try:
-        angle = calculate_angle(ellbow, wrist, mcp)
+        # 根据手臂方向自动判断手掌延伸方向
+        # 计算手臂向量
+        arm_vector = np.array(wrist) - np.array(elbow)
+        # 手掌应该在手臂的延长线上，垂直于手臂方向
+        perpendicular = np.array([-arm_vector[1], arm_vector[0]])
+        perpendicular = perpendicular / np.linalg.norm(perpendicular) * 30
+        
+        # 自动计算MCP点（手掌根部）
+        mcp = wrist + perpendicular
+        
+        angle = calculate_angle(elbow, wrist, mcp)
         return max(-30, min(30, 180 - angle))
     except:
-        return 5  # 优化：更接近中立位，远离高风险阈值
+        return 5  # 识别失败默认5°
 
 def process_image(image):
     mp_pose, pose = load_pose_models()
@@ -215,16 +234,12 @@ def process_image(image):
             
         # 手腕角度计算
         if is_visible(mp_pose.PoseLandmark.LEFT_ELBOW) and is_visible(mp_pose.PoseLandmark.LEFT_WRIST):
-            try:
-                mcp = [l_wri[0]+20, l_wri[1]+20]
-                rula_angles["wrist_bend"] = calculate_wrist_bend(l_elb, l_wri, mcp)
-            except:
-                default_angles.append("手腕")
+            rula_angles["wrist_bend"] = calculate_wrist_bend(l_elb, l_wri, "left")
         else:
             default_angles.append("手腕")
 
         if default_angles:
-            detection_message = f"⚠️ 部分角度识别失败，已自动填充默认值：{', '.join(default_angles)}"
+            detection_message = f"⚠️ 部分角度识别失败，已自动填充默认值，建议手动调整该值：{', '.join(default_angles)}"
 
         mp.solutions.drawing_utils.draw_landmarks(
             image, pose_result.pose_landmarks, mp_pose.POSE_CONNECTIONS
