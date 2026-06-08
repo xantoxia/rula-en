@@ -253,10 +253,14 @@ def process_image(image):
                  (245, 117, 66),  # 橙色，和其他连线颜色一致
                  2)
 
-        # 绘制默认身体连线
+        # ✅ 彻底移除面部红点，只显示身体骨骼连线
         mp.solutions.drawing_utils.draw_landmarks(
-            image, pose_result.pose_landmarks, mp_pose.POSE_CONNECTIONS,
+            image, 
+            pose_result.pose_landmarks, 
+            mp_pose.POSE_CONNECTIONS,
+            # 身体关键点：橙色，大小2
             mp.solutions.drawing_utils.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=2),
+            # 面部关键点：大小0，完全不显示
             mp.solutions.drawing_utils.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=0)
         )
 
