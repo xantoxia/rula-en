@@ -216,36 +216,36 @@ def process_image(image):
         mid_hip = [(l_hip[i]+r_hip[i])/2 for i in range(3)]
 
         # ✅ 正确逻辑：先计算，再判断是否成功
-# 颈部角度计算（修复后）
-if (is_visible(mp_pose.PoseLandmark.NOSE) 
-    and is_visible(mp_pose.PoseLandmark.LEFT_SHOULDER) 
-    and is_visible(mp_pose.PoseLandmark.RIGHT_SHOULDER)
-    and is_visible(mp_pose.PoseLandmark.LEFT_HIP)
-    and is_visible(mp_pose.PoseLandmark.RIGHT_HIP)):
+        # 颈部角度计算（修复后）
+        if (is_visible(mp_pose.PoseLandmark.NOSE) 
+            and is_visible(mp_pose.PoseLandmark.LEFT_SHOULDER) 
+            and is_visible(mp_pose.PoseLandmark.RIGHT_SHOULDER)
+            and is_visible(mp_pose.PoseLandmark.LEFT_HIP)
+            and is_visible(mp_pose.PoseLandmark.RIGHT_HIP)):
     
-    neck_angle = calculate_neck_flexion(
-        nose, l_sho, r_sho, l_hip, r_hip
-    )
+            neck_angle = calculate_neck_flexion(
+                nose, l_sho, r_sho, l_hip, r_hip
+            )
     
-    if neck_angle is not None:
-        rula_angles["neck_angle"] = neck_angle
-        # ✅ 只有计算成功时才画橙色实线
-        cv2.line(image, 
-                 (int(nose[0]), int(nose[1])), 
-                 (int(mid_sho[0]), int(mid_sho[1])), 
-                 (245, 117, 66),  # 橙色实线
-                 2)
-    else:
-        default_angles.append("颈部")
-        # ✅ 计算失败时画灰色虚线，明确提示
-        cv2.line(image, 
-                 (int(nose[0]), int(nose[1])), 
-                 (int(mid_sho[0]), int(mid_sho[1])), 
-                 (128, 128, 128),  # 灰色虚线
-                 2,
-                 cv2.LINE_AA)
-else:
-    default_angles.append("颈部")
+            if neck_angle is not None:
+                rula_angles["neck_angle"] = neck_angle
+                # ✅ 只有计算成功时才画橙色实线
+                cv2.line(image, 
+                         (int(nose[0]), int(nose[1])), 
+                         (int(mid_sho[0]), int(mid_sho[1])), 
+                        (245, 117, 66),  # 橙色实线
+                         2)
+            else:
+                default_angles.append("颈部")
+                # ✅ 计算失败时画灰色虚线，明确提示
+                cv2.line(image, 
+                         (int(nose[0]), int(nose[1])), 
+                         (int(mid_sho[0]), int(mid_sho[1])), 
+                         (128, 128, 128),  # 灰色虚线
+                         2,
+                         cv2.LINE_AA)
+        else:
+            default_angles.append("颈部")
             
         # 躯干角度
         if is_visible(mp_pose.PoseLandmark.LEFT_SHOULDER) and is_visible(mp_pose.PoseLandmark.LEFT_HIP) and is_visible(mp_pose.PoseLandmark.LEFT_KNEE):
