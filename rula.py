@@ -374,10 +374,9 @@ if uploaded_file:
         with col_angles:
             st.markdown("### 📊 识别角度结果")
             
-            # ✅ 改用Streamlit原生DataFrame，彻底解决HTML渲染问题
             import pandas as pd
             
-            # 构建数据
+            # 构建纯净数据（不含_style列）
             angle_data = []
             angle_items = [
                 ("手臂", "arm_angle"),
@@ -387,39 +386,47 @@ if uploaded_file:
                 ("躯干", "trunk_angle")
             ]
             
-            for name, key in angle_items:
+            # 单独记录需要高亮的行索引
+            highlight_rows = []
+            success_rows = []
+            
+            for idx, (name, key) in enumerate(angle_items):
                 angle = int(rula_angles[key])
                 if name in default_angles:
                     status = "⚠️ 默认值"
-                    style = "background-color: #fff3cd"
+                    highlight_rows.append(idx)
                 else:
                     status = "✅ 识别成功"
-                    style = "color: #00B050; font-weight: bold"
+                    success_rows.append(idx)
                 
                 angle_data.append({
                     "部位": name,
                     "角度(°)": angle,
-                    "状态": status,
-                    "_style": style  # 用于后续样式设置
+                    "状态": status
                 })
             
-            # 创建DataFrame
+            # 创建纯净的DataFrame
             df = pd.DataFrame(angle_data)
             
-            # 定义样式函数
-            def highlight_rows(row):
-                return [row["_style"]] * len(row)
+            # ✅ 更兼容的样式应用方式（不会产生多余列）
+            def style_row(row):
+                styles = [""] * len(row)
+                if row["状态"] == "⚠️ 默认值":
+                    styles = ["background-color: #fff3cd"] * len(row)
+                elif row["状态"] == "✅ 识别成功":
+                    styles[1] = "color: #00B050; font-weight: bold"  # 只高亮角度列
+                return styles
             
-            # 应用样式并显示（隐藏索引列和样式列）
-            styled_df = df.style.apply(highlight_rows, axis=1).hide(axis="index").hide(["_style"], axis=1)
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            # 应用样式并显示
+            styled_df = df.style.apply(style_row, axis=1).hide(axis="index")
+            st.dataframe(styled_df, use_container_width=True, hide_index=True, height=220)
             
             # 显示识别状态提示
             if detection_message.startswith("✅"):
                 st.success(detection_message)
             elif detection_message.startswith("⚠️"):
                 st.warning(detection_message)
-                st.info("💡 建议：调整拍照角度，确保全身侧身90°，无遮挡，以获得更准确的识别结果")
+                st.info("💡 建议：调整拍照角度，确保全身侧身90°，手臂和手腕无遮挡，以获得更准确的识别结果")
             else:
                 st.error(detection_message)
                 st.session_state.detection_success = False
@@ -428,7 +435,7 @@ if uploaded_file:
         if detection_message.startswith("✅") or detection_message.startswith("⚠️"):
             st.session_state.auto_angles = rula_angles
             st.session_state.detection_success = True
-
+            
 # 优化后的代码（和process_image里的科学默认值保持一致）
 if st.session_state.detection_success and st.session_state.auto_angles:
     default_arm = int(st.session_state.auto_angles["arm_angle"])
