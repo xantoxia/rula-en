@@ -428,8 +428,6 @@ with st.form("rula_assessment_form"):
 # ===================== 第三部分：只显示历史记录（不会重复） =====================
 st.markdown("<div class='section-header'>【第三部分】💡 AI分析建议及咨询</div>", unsafe_allow_html=True)
 
-submit_button = st.form_submit_button("开始评估", type="primary", width='stretch')
-
 # ===================== 第一步：先处理所有逻辑（计算+AI生成），再渲染任何内容 =====================
 # 1. 处理评估计算
 if submit_button:
