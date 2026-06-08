@@ -162,33 +162,17 @@ def process_image(image):
         "trunk_angle": 10
     }
     
-    # 新增：记录哪些角度是自动填充的默认值
+    # 记录哪些角度是自动填充的默认值
     default_angles = []
-    detection_message = "✅ 识别成功"
+    detection_message = "✅ 所有角度识别成功"
 
     if pose_result.pose_landmarks:
         landmarks = pose_result.pose_landmarks.landmark
         
-        # 新增：关键点可见性检查（置信度>0.5才认为有效）
+        # 关键点可见性检查（置信度>0.5才认为有效）
         def is_visible(landmark_idx):
             return landmarks[landmark_idx].visibility > 0.5
         
-        # 检查所有必需关键点
-        required_landmarks = [
-            mp_pose.PoseLandmark.NOSE,
-            mp_pose.PoseLandmark.LEFT_SHOULDER,
-            mp_pose.PoseLandmark.RIGHT_SHOULDER,
-            mp_pose.PoseLandmark.LEFT_ELBOW,
-            mp_pose.PoseLandmark.LEFT_WRIST,
-            mp_pose.PoseLandmark.LEFT_HIP,
-            mp_pose.PoseLandmark.RIGHT_HIP,
-            mp_pose.PoseLandmark.LEFT_KNEE
-        ]
-        
-        missing_landmarks = [lm for lm in required_landmarks if not is_visible(lm)]
-        if missing_landmarks:
-            detection_message = f"⚠️ 部分关键点被遮挡，以下角度为自动填充："
-
         def pt(landmark):
             return get_coord(landmarks[landmark], W, H)
 
@@ -240,7 +224,7 @@ def process_image(image):
             default_angles.append("手腕")
 
         if default_angles:
-            detection_message += "、".join(default_angles)
+            detection_message = f"⚠️ 部分角度识别失败，已自动填充默认值：{', '.join(default_angles)}"
 
         mp.solutions.drawing_utils.draw_landmarks(
             image, pose_result.pose_landmarks, mp_pose.POSE_CONNECTIONS
@@ -381,23 +365,74 @@ if uploaded_file:
         image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         processed_image, rula_angles, detection_message, default_angles = process_image(image)
         
-        st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="姿势识别结果", width=640)
+        # ✅ 左右分栏布局：左侧图片，右侧角度结果
+        col_img, col_angles = st.columns([3, 2])
         
-        if detection_message.startswith("✅"):
-            st.success(detection_message)
-        elif detection_message.startswith("⚠️"):
-            st.warning(detection_message)
-            st.info("建议：调整拍照角度，确保全身侧身90°，无遮挡，以获得更准确的识别结果")
-        else:
-            st.error(detection_message)
-            st.session_state.detection_success = False
+        with col_img:
+            st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="姿势识别结果", width=640)
         
-        # 关键修复：只有真正检测成功时才更新角度
+        with col_angles:
+            st.markdown("### 📊 识别角度结果")
+            
+            # 生成角度结果表格
+            table_html = """
+            <table style="width:100%; border-collapse: collapse; margin-top: 10px;">
+                <tr style="background-color: #f0f2f6;">
+                    <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">部位</th>
+                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">角度(°)</th>
+                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">状态</th>
+                </tr>
+            """
+            
+            # 定义部位名称和对应的角度键
+            angle_items = [
+                ("手臂", "arm_angle"),
+                ("前臂", "forearm_angle"),
+                ("手腕", "wrist_bend"),
+                ("颈部", "neck_angle"),
+                ("躯干", "trunk_angle")
+            ]
+            
+            for name, key in angle_items:
+                angle = int(rula_angles[key])
+                if name in default_angles:
+                    # 默认角度用黄色背景高亮
+                    table_html += f"""
+                    <tr style="background-color: #fff3cd;">
+                        <td style="padding: 8px; border: 1px solid #ddd;">{name}</td>
+                        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">{angle}</td>
+                        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">⚠️ 默认值</td>
+                    </tr>
+                    """
+                else:
+                    # 识别成功的角度用绿色文字
+                    table_html += f"""
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{name}</td>
+                        <td style="padding: 8px; text-align: center; border: 1px solid #ddd; color: #00b050; font-weight: bold;">{angle}</td>
+                        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">✅ 识别成功</td>
+                    </tr>
+                    """
+            
+            table_html += "</table>"
+            st.markdown(table_html, unsafe_allow_html=True)
+            
+            # 显示识别状态提示
+            if detection_message.startswith("✅"):
+                st.success(detection_message)
+            elif detection_message.startswith("⚠️"):
+                st.warning(detection_message)
+                st.info("💡 建议：调整拍照角度，确保全身侧身90°，无遮挡，以获得更准确的识别结果")
+            else:
+                st.error(detection_message)
+                st.session_state.detection_success = False
+        
+        # 关键修复：只有真正检测成功或部分成功时才更新角度
         if detection_message.startswith("✅") or detection_message.startswith("⚠️"):
             st.session_state.auto_angles = rula_angles
             st.session_state.detection_success = True
 
-# 关键修复：只有检测成功时才使用自动识别的角度，否则使用默认值
+# 优化后的代码（和process_image里的科学默认值保持一致）
 if st.session_state.detection_success and st.session_state.auto_angles:
     default_arm = int(st.session_state.auto_angles["arm_angle"])
     default_forearm = int(st.session_state.auto_angles["forearm_angle"])
@@ -405,11 +440,12 @@ if st.session_state.detection_success and st.session_state.auto_angles:
     default_neck = int(st.session_state.auto_angles["neck_angle"])
     default_trunk = int(st.session_state.auto_angles["trunk_angle"])
 else:
+    # 完全识别失败时，也用科学的中立姿势默认值，而不是0
     default_arm = 0
     default_forearm = 90
-    default_wrist = 0
-    default_neck = 0
-    default_trunk = 0
+    default_wrist = 5  # 优化：和process_image一致
+    default_neck = 8   # 优化：和process_image一致
+    default_trunk = 10 # 优化：和process_image一致
 
 # ========== 标题挪到form外面，单独一行 ==========
 st.markdown("<div class='section-header'>【第二部分】📊 RULA快速上肢评估</div>", unsafe_allow_html=True)
