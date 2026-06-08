@@ -497,10 +497,10 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
             {"role": "user", "content": ai_prompt}
         ])
 
-        # 存入历史（新记录插最前面，自带空聊天历史）
+        # ✅ 修复：把full_response改成ai_response
         new_item = {
             "score": scores['rula_total'],
-            "content": full_response,
+            "content": ai_response,
             "messages": []  # 每条评估自带独立聊天历史
         }
         st.session_state.rula_history.insert(0, new_item)
