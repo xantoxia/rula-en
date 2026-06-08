@@ -120,26 +120,22 @@ def calculate_angle(a, b, c):
     cos_theta = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6)
     return np.degrees(np.arccos(np.clip(cos_theta, -1.0, 1.0)))
 
-# ===================== ✅ 修复 2：颈部角度失败不返回0 =====================
+# ===================== ✅ 重构：计算失败返回None，不再返回默认值 =====================
 def calculate_neck_flexion(nose, shoulder_mid, hip_mid):
     try:
-        # 方法1：侧面照片用角度差（原有逻辑）
         torso_vector = np.array(hip_mid) - np.array(shoulder_mid)
         head_vector = np.array(nose) - np.array(shoulder_mid)
         angle_side = abs(np.degrees(np.arctan2(*torso_vector)) - np.degrees(np.arctan2(*head_vector)))
         
-        # 方法2：正面照片用垂直距离比（新增逻辑）
         vertical_distance = abs(nose[1] - shoulder_mid[1])
         horizontal_distance = abs(nose[0] - shoulder_mid[0])
         angle_front = np.degrees(np.arctan2(vertical_distance, horizontal_distance))
         
-        # 取两个方法的最大值，更准确
         angle = max(angle_side, angle_front)
         return max(5, min(60, angle))
     except:
-        return 8  # 识别失败默认8°
+        return None  # ✅ 计算失败返回None，不再返回默认值
 
-# ===================== ✅ 修复 3：躯干角度失败不返回0 =====================
 def calculate_trunk_flexion(shoulder_mid, hip_mid, knee_mid):
     try:
         torso = np.array(hip_mid) - np.array(shoulder_mid)
@@ -147,25 +143,19 @@ def calculate_trunk_flexion(shoulder_mid, hip_mid, knee_mid):
         angle = abs(np.degrees(np.arctan2(*torso)) - np.degrees(np.arctan2(*leg)))
         return max(5, min(90, angle))
     except:
-        return 10  # 保持不变，已经很科学
+        return None
 
-# ===================== ✅ 修复 4：手腕角度增加计算 =====================
-def calculate_wrist_bend(elbow, wrist, hand_direction):
+def calculate_wrist_bend(elbow, wrist):
     try:
-        # 根据手臂方向自动判断手掌延伸方向
-        # 计算手臂向量
         arm_vector = np.array(wrist) - np.array(elbow)
-        # 手掌应该在手臂的延长线上，垂直于手臂方向
         perpendicular = np.array([-arm_vector[1], arm_vector[0]])
         perpendicular = perpendicular / np.linalg.norm(perpendicular) * 30
-        
-        # 自动计算MCP点（手掌根部）
         mcp = wrist + perpendicular
         
         angle = calculate_angle(elbow, wrist, mcp)
         return max(-30, min(30, 180 - angle))
     except:
-        return 5  # 识别失败默认5°
+        return None
 
 def process_image(image):
     mp_pose, pose = load_pose_models()
@@ -173,7 +163,8 @@ def process_image(image):
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     pose_result = pose.process(img_rgb)
 
-    rula_angles = {
+    # ✅ 科学默认值（只在计算失败时使用）
+    DEFAULT_VALUES = {
         "arm_angle": 0,
         "forearm_angle": 90,
         "wrist_bend": 5,
@@ -181,14 +172,13 @@ def process_image(image):
         "trunk_angle": 10
     }
     
-    # 记录哪些角度是自动填充的默认值
+    rula_angles = DEFAULT_VALUES.copy()
     default_angles = []
     detection_message = "✅ 所有角度识别成功"
 
     if pose_result.pose_landmarks:
         landmarks = pose_result.pose_landmarks.landmark
         
-        # 关键点可见性检查（置信度>0.5才认为有效）
         def is_visible(landmark_idx):
             return landmarks[landmark_idx].visibility > 0.5
         
@@ -208,41 +198,66 @@ def process_image(image):
         mid_sho = [(l_sho[i]+r_sho[i])/2 for i in range(3)]
         mid_hip = [(l_hip[i]+r_hip[i])/2 for i in range(3)]
 
-        # 颈部角度计算
+        # ✅ 正确逻辑：先计算，再判断是否成功
+        # 颈部角度
         if is_visible(mp_pose.PoseLandmark.NOSE) and is_visible(mp_pose.PoseLandmark.LEFT_SHOULDER) and is_visible(mp_pose.PoseLandmark.LEFT_HIP):
-            rula_angles["neck_angle"] = calculate_neck_flexion(nose, mid_sho, mid_hip)
+            neck_angle = calculate_neck_flexion(nose, mid_sho, mid_hip)
+            if neck_angle is not None:
+                rula_angles["neck_angle"] = neck_angle
+            else:
+                default_angles.append("颈部")
         else:
             default_angles.append("颈部")
             
-        # 躯干角度计算
+        # 躯干角度
         if is_visible(mp_pose.PoseLandmark.LEFT_SHOULDER) and is_visible(mp_pose.PoseLandmark.LEFT_HIP) and is_visible(mp_pose.PoseLandmark.LEFT_KNEE):
-            rula_angles["trunk_angle"] = calculate_trunk_flexion(mid_sho, mid_hip, l_knee)
+            trunk_angle = calculate_trunk_flexion(mid_sho, mid_hip, l_knee)
+            if trunk_angle is not None:
+                rula_angles["trunk_angle"] = trunk_angle
+            else:
+                default_angles.append("躯干")
         else:
             default_angles.append("躯干")
             
-        # 手臂角度计算
+        # 手臂角度
         if is_visible(mp_pose.PoseLandmark.LEFT_HIP) and is_visible(mp_pose.PoseLandmark.LEFT_SHOULDER) and is_visible(mp_pose.PoseLandmark.LEFT_ELBOW):
-            rula_angles["arm_angle"] = calculate_angle(mid_hip, l_sho, l_elb)
+            arm_angle = calculate_angle(mid_hip, l_sho, l_elb)
+            rula_angles["arm_angle"] = arm_angle
         else:
             default_angles.append("手臂")
             
-        # 前臂角度计算
+        # 前臂角度
         if is_visible(mp_pose.PoseLandmark.LEFT_SHOULDER) and is_visible(mp_pose.PoseLandmark.LEFT_ELBOW) and is_visible(mp_pose.PoseLandmark.LEFT_WRIST):
-            rula_angles["forearm_angle"] = calculate_angle(l_sho, l_elb, l_wri)
+            forearm_angle = calculate_angle(l_sho, l_elb, l_wri)
+            rula_angles["forearm_angle"] = forearm_angle
         else:
             default_angles.append("前臂")
             
-        # 手腕角度计算
+        # 手腕角度
         if is_visible(mp_pose.PoseLandmark.LEFT_ELBOW) and is_visible(mp_pose.PoseLandmark.LEFT_WRIST):
-            rula_angles["wrist_bend"] = calculate_wrist_bend(l_elb, l_wri, "left")
+            wrist_angle = calculate_wrist_bend(l_elb, l_wri)
+            if wrist_angle is not None:
+                rula_angles["wrist_bend"] = wrist_angle
+            else:
+                default_angles.append("手腕")
         else:
             default_angles.append("手腕")
 
         if default_angles:
             detection_message = f"⚠️ 部分角度识别失败，已自动填充默认值，建议手动修正：{', '.join(default_angles)}"
 
+        # ✅ 新增：手动绘制颈部连线（鼻子→肩膀中点）
+        cv2.line(image, 
+                 (int(nose[0]), int(nose[1])), 
+                 (int(mid_sho[0]), int(mid_sho[1])), 
+                 (245, 117, 66),  # 橙色，和其他连线颜色一致
+                 2)
+
+        # 绘制默认身体连线
         mp.solutions.drawing_utils.draw_landmarks(
-            image, pose_result.pose_landmarks, mp_pose.POSE_CONNECTIONS
+            image, pose_result.pose_landmarks, mp_pose.POSE_CONNECTIONS,
+            mp.solutions.drawing_utils.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=2),
+            mp.solutions.drawing_utils.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2)
         )
 
     pose.close()
