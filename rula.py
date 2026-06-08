@@ -371,11 +371,10 @@ if uploaded_file:
         with col_img:
             st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="姿势识别结果", width=640)
         
-        # ✅ 关键修复：with col_angles: 后面的所有代码都缩进4个空格
         with col_angles:
             st.markdown("### 📊 识别角度结果")
             
-            # 生成角度结果表格
+            # 生成角度结果表格（唯一的表格生成代码）
             table_html = """
             <table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 14px;">
                 <tr style="background-color: #0070C0; color: white;">
@@ -417,7 +416,7 @@ if uploaded_file:
             
             table_html += "</table>"
             
-            # 渲染HTML表格
+            # ✅ 唯一的表格渲染代码，必须加unsafe_allow_html=True
             st.markdown(table_html, unsafe_allow_html=True)
             
             # 显示识别状态提示
