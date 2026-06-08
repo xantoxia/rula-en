@@ -534,7 +534,7 @@ if uploaded_file:
                 st.success(detection_message)
             elif detection_message.startswith("⚠️"):
                 st.warning(detection_message)
-                st.info("💡 建议：调整拍照角度，确保全身侧身90°，手臂和手腕无遮挡，以获得更准确的识别结果")
+                st.info("💡 建议：调整拍照角度，确保全身侧身90°，手臂和手腕无遮挡（例如取下手套），以获得更准确的识别结果")
             else:
                 st.error(detection_message)
                 st.session_state.detection_success = False
