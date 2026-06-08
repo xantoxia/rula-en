@@ -310,6 +310,12 @@ def call_deepseek_api(messages):
     except Exception as e:
         st.error(f"API错误: {e}")
         return ""
+        
+# ===================== 聊天消息显示函数 =====================
+def display_chat_messages():
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 # ===================== 主页面内容 =====================
 st.markdown("<h1 class='main-header'>RULA 快速上肢评估 系统</h1>", unsafe_allow_html=True)
