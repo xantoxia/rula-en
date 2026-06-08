@@ -427,10 +427,10 @@ def calculate_rula_scores(arm_angle, arm_abd, shoulder_up, arm_support, forearm_
     d = b + m + l
     rula = get_table3_score(c, d)
 
-    if rula <=2: lev,plan,cls="AL1","不需处理","risk-low"
-    elif rula <=4: lev,plan,cls="AL2","进一步调查及改善","risk-medium"
-    elif rula <=6: lev,plan,cls="AL3","近日内调查改善","risk-medium"
-    else: lev,plan,cls="AL4","必须立即改善","risk-high"
+    if rula <=2: lev,plan,cls="AL1","风险程度较低，不需要处理","risk-low"
+    elif rula <=4: lev,plan,cls="AL2","进一步调查及必要时进行改善","risk-medium"
+    elif rula <=6: lev,plan,cls="AL3","近日内需进行进一步调查及改善","risk-medium"
+    else: lev,plan,cls="AL4","必须立即进行调查及改善","risk-high"
 
     return {"arm_final":arm_final,"forearm_final":forearm_final,"wrist_final":wrist_final,
             "neck_final":neck_final,"trunk_final":trunk_final,"leg_final":leg_final,
@@ -480,7 +480,7 @@ if uploaded_file:
             st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="姿势识别结果", width=640)
         
         with col_angles:
-            st.markdown("### 📊 识别角度结果")
+            st.markdown("### 📊 角度识别结果")
             
             import pandas as pd
             
@@ -783,7 +783,7 @@ else:
                     st.markdown(message["content"])
             
             # 该评估的独立聊天输入框（key也要改成用actual_number，避免重复）
-            prompt = st.chat_input(f"针对第{actual_number}次评估继续咨询...", key=f"chat_input_{actual_number}")
+            prompt = st.chat_input(f"针对第{actual_number}次评估继续咨询人因工程相关问题...", key=f"chat_input_{actual_number}")
             if prompt:
                 if not st.session_state.api_key_entered:
                     st.error("请先完成评估，系统会自动初始化API")
@@ -820,7 +820,7 @@ with st.sidebar:
     #### 评分标准：
     | RULA总分 | 行动水准 | 处理方案 |
     |----------|----------|----------|
-    | 1-2 | AL1 | 不需处理 |
+    | 1-2 | AL1 | 风险程度较低，不需要处理 |
     | 3-4 | AL2 | 进一步调查及必要时进行改善 |
     | 5-6 | AL3 | 近日内需进行进一步调查及改善 |
     | ≥7 | AL4 | 必须立即进行调查及改善 |
