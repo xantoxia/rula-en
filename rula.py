@@ -702,10 +702,14 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
     scores = st.session_state.last_scores
     
     with st.spinner("🧠 AI正在生成人因风险分析报告..."):
-        ai_prompt = f"""      
+        ai_prompt = f"""
         你是专业人因工程专家，严格依照RULA、ISO11226标准输出分析报告。
-        强制固定排版结构，分三大块，每一处肢体必须同时写出【实测角度° + 分项得分】：
-
+        ⚠️ 【强制要求，必须严格遵守】
+        1. 报告开头必须首先完整输出【本次评估结果摘要】，格式完全照搬下面给的模板，不能有任何改动
+        2. 绝对不允许在摘要之前写任何开场白、客套话
+        3. 摘要之后再写分部位风险分析和改善建议
+        4. 每一处肢体必须同时写出【实测角度° + 分项得分】
+        
         【本次评估结果摘要】
         - A总分（上肢）：{scores['a_total']}
         - B总分（躯干）：{scores['b_total']}
@@ -713,7 +717,7 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
         - 最终RULA总分：{scores['rula_total']}
         - 行动水准：{scores['action_level']}
         - 处理方案：{scores['action_plan']}
-
+        
         原始测量角度：
         手臂弯曲角度：{arm_angle}°
         前臂弯曲角度：{forearm_angle}°
