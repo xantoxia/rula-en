@@ -490,7 +490,7 @@ def call_deepseek_api(messages):
             st.session_state.client = OpenAI(api_key=API_KEY, base_url="https://api.siliconflow.cn/v1")
             st.session_state.api_key_entered = True
         res = ""
-        for chunk in st.session_state.client.chat.completions.create(model="deepseek-ai/DeepSeek-V4-Flash", messages=messages, stream=True):
+        for chunk in st.session_state.client.chat.completions.create(model="Qwen/Qwen3.6-27B", messages=messages, stream=True):
             if chunk.choices and chunk.choices[0].delta.content:
                 res += chunk.choices[0].delta.content
         return res
