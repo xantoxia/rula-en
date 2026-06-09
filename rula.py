@@ -423,23 +423,30 @@ def calculate_rula_scores(arm_angle, arm_abd, shoulder_up, arm_support, forearm_
     b = get_table2_score(neck_final, trunk_final, leg_final)
 
     # ===================== 肌肉状态 + 负荷状态 完整评分（严格匹配RULA原表）=====================
-    # 肌肉状态 m（0或1）
+    # 肌肉状态 m（0或1）+ 对应描述文本
     if muscle_state in ["静态，或持物超过1分钟","重复作业超过4次/分钟"]:
         m = 1
+        muscle_text = "存在长时间静态握持或每分钟4次以上高频重复动作，肌肉持续静态承压，疲劳劳损风险升高"
     else:
         m = 0
+        muscle_text = "作业姿势动态切换充足，无长期僵持与高频重复，肌肉间歇充分，基础负荷正常"
 
-    # 负荷状态 l（0/1/2/3 四档完整匹配）
+    # 负荷状态 l（0/1/2/3 四档完整匹配）+ 对应描述文本
     if load_state == "无作用力/小于2kg周期性的负荷或力量":
         l = 0
+        load_text = "几乎无外力负重，关节附加压力极低"
     elif load_state == "2-10kg周期性的负荷或力量":
         l = 1
+        load_text = "2–10kg周期性载荷，小幅增加关节肌肉负荷，搭配不良姿势会放大劳损风险"
     elif load_state == "2-10kg静态/重复负荷，10kg或更多周期性负荷":
         l = 2
+        load_text = "2–10kg静态持重或≥10kg周期载荷，劳损风险明显上升"
     elif load_state == "10kg静态，10kg重复的负荷或力量，振动或力量快速增加":
         l = 3
+        load_text = "≥10kg静态握持、剧烈振动或爆发力作业，属于高损伤风险载荷"
     else:
         l = 0
+        load_text = "几乎无外力负重，关节附加压力极低"
                         
     c = a + m + l
     d = b + m + l
@@ -474,6 +481,7 @@ def calculate_rula_scores(arm_angle, arm_abd, shoulder_up, arm_support, forearm_
         "action_plan": plan,
         "risk_class": cls
     }
+                             
 # ===================== AI 模块 =====================
 def call_deepseek_api(messages):
     try:
