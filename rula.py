@@ -758,6 +758,7 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
         3. 不要使用任何多余的缩进或空格
         4. 语言专业平实，不要多余花哨格式
         5. 每一段肢体必须带上角度+分数成对展示
+        """
         
         ai_response = call_deepseek_api([
             {"role": "system", "content": "你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。"},
@@ -778,7 +779,7 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
           
     # 生成完立即关闭开关，防止重复生成
     st.session_state.need_gen_ai = False
-
+    
 # ===================== 第二步：所有逻辑处理完，再渲染页面内容 =====================
 # 1. 渲染RULA评估结果卡片（只有点击按钮后才显示）
 if "rula_result" in st.session_state and st.session_state.rula_result is not None:
@@ -811,8 +812,8 @@ if "rula_result" in st.session_state and st.session_state.rula_result is not Non
     
     st.markdown(f"""
     <div style="background-color: #F8F9FA; padding: 20px; border-radius: 10px; margin: 15px 0;">
-        <h3>行动水准：<span class='{scores['risk_class']}'>{scores['action_level']}</span></h3>
-        <p>处理方案：<span class='{scores['risk_class']}'>{scores['action_plan']}</span></p>
+        <h3>行动水准：<span class="{scores['risk_class']}">{scores['action_level']}</span></h3>
+        <p>处理方案：<span class="{scores['risk_class']}">{scores['action_plan']}</span></p>
     </div>
     """, unsafe_allow_html=True)
 
