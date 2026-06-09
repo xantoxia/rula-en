@@ -703,11 +703,13 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
     
     with st.spinner("🧠 AI正在生成人因风险分析报告..."):
         ai_prompt = f"""
-        你是专业人因工程专家，严格依照RULA、ISO11226标准输出分析报告。
+        你是专业的人因工程专家，精通RULA快速上肢评估法和ISO 11226国际标准。
         ⚠️ 【强制格式要求】
         1. 开头必须先输出【本次评估结果摘要】，不能有任何开场白
         2. 每个○条目必须单独回车占一行，绝对不能合并
-        3. 所有肢体必须同时写出【实测角度° + 分项得分】
+        3. 所有肢体必须同时写出【实测角度° + 分项得分】，并分析具体风险，结合RULA评估标准
+        4. 给出针对性的、可落地的改善建议，分为姿势调整、工作环境优化、休息方案三个部分
+        5. 语言专业、简洁、易懂
         
         【本次评估结果摘要】
         - A总分（上肢）：{scores['a_total']}
@@ -718,14 +720,24 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
         - 处理方案：{scores['action_plan']}
         
         评估数据：
-        手臂：{arm_angle}°，得分{scores['arm_final']}
-        前臂：{forearm_angle}°，得分{scores['forearm_final']}
-        手腕：{wrist_bend}°，得分{scores['wrist_final']}
-        颈部：{neck_angle}°，得分{scores['neck_final']}
-        躯干：{trunk_angle}°，得分{scores['trunk_final']}
-        腿部：得分{scores['leg_final']}
-        肌肉：{muscle_state}，得分{scores['muscle_score']}，{scores['muscle_desc']}
-        负荷：{load_state}，得分{scores['load_score']}，{scores['load_desc']}
+        1. 上肢评分：
+        - 手臂：{arm_angle}°，得分{scores['arm_final']}
+        - 前臂：{forearm_angle}°，得分{scores['forearm_final']}
+        - 手腕：{wrist_bend}°，得分{scores['wrist_final']}
+        - A总分：{scores['a_total']}
+        2. 躯干评分：
+        - 颈部：{neck_angle}°，得分{scores['neck_final']}
+        - 躯干：{trunk_angle}°，得分{scores['trunk_final']}
+        - 腿部：得分{scores['leg_final']}
+        - B总分：{scores['b_total']}
+        3. 肌肉与负荷评分：
+        - 肌肉：{muscle_state}，得分{scores['muscle_score']}，{scores['muscle_desc']}
+        - 负荷：{load_state}，得分{scores['load_score']}，{scores['load_desc']}
+        - C总分：{scores['c_total']}，D总分：{scores['d_total']}
+        4. 最终结果：
+        - RULA总分：{scores['rula_total']}
+        - 行动水准：{scores['action_level']}
+        - 处理方案：{scores['action_plan']}
         
         输出结构：
         ## 一、分部位风险分析（结合RULA标准）
@@ -741,8 +753,6 @@ if st.session_state.need_gen_ai and "last_scores" in st.session_state and st.ses
             ○ 肌肉状态（工况名称，评分X）：解读
             ○ 负荷状态（工况名称，评分X）：解读
         
-        ## 二、可落地的改善建议
-        分三类：姿势调整、工位环境优化、轮岗休息方案，务实可执行。
         """
         
         ai_response = call_deepseek_api([
