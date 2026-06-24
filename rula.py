@@ -513,8 +513,8 @@ st.markdown("<h1 class='main-header'>RULA Rapid Upper Limb Assessment System</h1
 st.markdown("This system is developed based on the **Rapid Upper Limb Assessment (RULA)** method (McAtamney & Corlett, 1993), in strict compliance with the international standard **ISO 11226:2000 Ergonomics — Evaluation of static working postures**.")
 
 # Section 1: Photo Angle Recognition
-st.markdown("<div class='section-header'>【Section 1】📷 Photo-based Angle Recognition (Recommended: 90° full-body side profile)</div>", unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Upload work posture photo (JPG, PNG supported)", type=["jpg", "jpeg", "png"])
+st.markdown("<div class='section-header'>【Section 1】📷 Photo-based Angle Recognition </div>", unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Upload work posture photo (Recommended: 90° full-body side profile) (JPG, PNG supported)", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     with st.spinner("Detecting posture..."):
@@ -525,7 +525,7 @@ if uploaded_file:
         col_img, col_angles = st.columns([3, 2])
         
         with col_img:
-            st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="Pose Detection Result", width=640)
+            st.image(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB), caption="Pose Detection Result", width=320)
         
         with col_angles:
             st.markdown("### 📊 Angle Detection Results")
